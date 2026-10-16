@@ -4,15 +4,17 @@
     python3 tools/build_web.py
 
 Schrijft:
-    app/dist/index.html                    om lokaal of via USB te gebruiken
+    app/dist/                              de online app (index.html, manifest, service worker, pictogrammen)
     firmware/trekker_gps/web_app.h         gecomprimeerde app in het geheugen van de ESP32
 """
 import gzip
+import hashlib
 import pathlib
+import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "app" / "src"
-ORDER = ["brand.js", "nmea.js", "geo.js", "isoxml.js", "zip.js", "demo.js", "app.js"]
+ORDER = ["brand.js", "nmea.js", "geo.js", "isoxml.js", "zip.js", "store.js", "sync.js", "demo.js", "app.js"]
 
 
 def main() -> None:
@@ -27,9 +29,15 @@ def main() -> None:
         raise SystemExit("app/index.html mist <!-- SCRIPTS -->")
     html = template.replace("<!-- SCRIPTS -->", "\n".join(scripts))
 
-    dist = ROOT / "app" / "dist" / "index.html"
-    dist.parent.mkdir(parents=True, exist_ok=True)
-    dist.write_text(html, encoding="utf-8")
+    dist_dir = ROOT / "app" / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    (dist_dir / "index.html").write_text(html, encoding="utf-8")
+    version = hashlib.sha256(html.encode("utf-8")).hexdigest()[:12]
+    for f in (ROOT / "app" / "static").iterdir():
+        if f.name == "sw.js":
+            (dist_dir / f.name).write_text(f.read_text(encoding="utf-8").replace("__VERSION__", version), encoding="utf-8")
+        else:
+            shutil.copyfile(f, dist_dir / f.name)
 
     data = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
     rows = []

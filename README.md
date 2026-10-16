@@ -2,7 +2,7 @@
 
 Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelijk:
 
-- **De tablet** toont de eigen Trekker-GPS app via wifi. Die tekent de kaart, neemt perceelgrenzen op en exporteert ISOXML.
+- **De tablet** draait de Trekker-GPS app en krijgt de positie via Bluetooth. De app tekent de kaart, neemt perceelgrenzen op, bewaart alle percelen en zet ze in je Google Drive.
 - **De Amazone Amatron 3** krijgt GGA, VTG en GSA via RS232 aan 19200 baud, zoals de handleiding vraagt.
 
 ```
@@ -13,8 +13,9 @@ Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelij
                  └────────┬────────┘
                           │ 3,3V seriëel, 115200 baud
                  ┌────────┴────────┐
- tablet ◄─wifi───┤      ESP32      ├──wifi──► NTRIP (RTK-correcties, optioneel)
- (app in browser)│                 │
+ tablet ◄──BLE───┤      ESP32      ├──wifi──► NTRIP (RTK-correcties, optioneel)
+   │             │                 │
+   └─internet──► Google Drive
                  └────────┬────────┘
                           │ 3,3V
                  ┌────────┴────────┐
@@ -111,34 +112,67 @@ Oudere Amatron-software verwacht soms `$GPGGA` in plaats van `$GNGGA`. De firmwa
 
 ![De Trekker-GPS app tijdens het werk](docs/app-werken.png)
 
-De app zit in het geheugen van de ESP32. Er is niets te installeren, en ze werkt op elke tablet met een browser, Windows of Android.
+De app staat online en werkt daarna ook zonder internet:
 
-1. Zet het GPS-kastje aan.
-2. Verbind de tablet met het wifinetwerk **Trekker-GPS**. Het standaardwachtwoord is `trekker123`. Verander het in `config.h`.
-3. Open `http://192.168.4.1` in Chrome. De app verbindt automatisch.
-4. Voeg de pagina toe aan het startscherm, dan opent ze als een gewone app.
+**https://snoeckmichiel-ctrl.github.io/Claude-questions/**
+
+1. Open dit adres in Chrome op de tablet.
+2. Kies in het menu van Chrome "Toevoegen aan startscherm" of "App installeren". Dan opent ze als een gewone app, ook zonder internet.
+3. Zet het GPS-kastje aan en tik op **Bluetooth**. Kies "Trekker-GPS" in de lijst.
+
+Bluetooth werkt in Chrome op Android, Windows en Chromebook. Je hoeft het kastje niet te koppelen in de instellingen van de tablet. De tablet houdt zo zijn eigen internet, en dat is nodig voor Google Drive.
 
 **Werken met de app:**
 
-- **Instellingen:** naam van het perceel, klant, bedrijf en werkbreedte.
-- **Grens opnemen:** rij rond het perceel en druk op "Grens stoppen". De app toont de oppervlakte.
-- **Werk AAN/UIT:** tekent de bewerkte stroken in de werkbreedte en houdt het rijspoor bij. Overlap wordt donkerder.
-- **ISOXML exporteren:** maakt een zip met de map `TASKDATA`. Pak uit en zet de map op de USB-stick voor de Amatron of je bedrijfssoftware.
+- **Percelen:** elk perceel wordt apart bewaard. Maak een nieuw perceel, open een ouder perceel, exporteer of verwijder het.
+- **Instellingen:** naam van het perceel, klant, bedrijf, werkbreedte en de Drive-koppeling.
+- **Grens:** rij rond het perceel en druk op "Klaar". De app toont de oppervlakte.
+- **Start werk / Stop werk:** tekent de bewerkte stroken in de werkbreedte en houdt het rijspoor bij. Overlap wordt donkerder.
+- **ISOXML:** in de percelenlijst. Je krijgt een zip met de map `TASKDATA` voor de Amatron of je bedrijfssoftware.
 - **Demo:** een gesimuleerde tractor, om de app zonder GPS uit te proberen.
-- **Weergave:** dag, nacht of automatisch, voor werk in de zon of 's avonds.
+- **Weergave:** dag, nacht of automatisch.
 
-| Verbinden | Exporteren |
+| Verbinden | Percelen |
 |---|---|
-| ![Welkomstscherm](docs/app-welkom.png) | ![Export](docs/app-export.png) |
+| ![Welkomstscherm](docs/app-welkom.png) | ![Percelen](docs/app-percelen.png) |
 
-Alles wordt bewaard in de tablet, ook als de pagina herlaadt. Exporteer toch na elk perceel. Gewiste browsergegevens zijn anders weg.
+### Andere manieren om te verbinden
 
-De app werkt ook zonder kastje:
+- **Wifi via het kastje:** zet `WIFI_APP_ENABLED` op 1 in `config.h`. Verbind de tablet met het wifinetwerk "Trekker-GPS" en open `http://192.168.4.1`. Dit werkt ook op een iPad, maar zonder Google Drive, want de tablet heeft dan geen internet.
+- **USB-kabel:** in Chrome of Edge op een Windows-tablet of computer.
+- **Andere apps zoals AgOpenGPS:** zet `TABLET_BT_ENABLED` op 1 of gebruik de USB-kabel.
 
-- **Demo:** open `app/dist/index.html` op een computer en kies Demo bij Instellingen.
-- **USB-kabel:** in Chrome of Edge op een Windows-tablet of computer. Kies dan "USB-kabel" bij Instellingen.
+## Zo wordt alles bewaard
 
-Gebruik je liever een andere app, zoals AgOpenGPS? Zet dan `TABLET_BT_ENABLED` op 1 of gebruik de USB-kabel. Die kanalen sturen dezelfde NMEA-zinnen.
+| Waar | Wat | Wanneer |
+|---|---|---|
+| Op de tablet | Alle percelen met grens, stroken en rijspoor | Elke 3 seconden, ook zonder internet |
+| In Google Drive | ISOXML per perceel, reservekopie en overzicht | Bij stoppen, na een grens, elke 10 minuten en zodra er weer internet is |
+
+De lijst met percelen toont per perceel "In Drive" of "Wacht op Drive". Zonder internet wacht de app gewoon, en stuurt alles later door.
+
+Op een nieuwe tablet haal je de percelen terug via **Percelen**, dan **Percelen uit Drive tonen**.
+
+### Google Drive instellen
+
+Dit doe je één keer, op een computer, met het Google-account waar de gegevens moeten komen.
+
+1. Ga naar [script.google.com](https://script.google.com) en kies **Nieuw project**.
+2. Wis de voorbeeldcode en plak de inhoud van `drive/Code.gs` uit deze repo.
+3. Vervang bovenaan `verander-dit-in-een-eigen-geheim` door een eigen geheim woord. Dat is je **sleutel**.
+4. Klik op **Implementeren**, dan **Nieuwe implementatie**. Kies als type **Web-app**.
+5. Kies bij "Uitvoeren als" **Ik** en bij "Wie heeft toegang" **Iedereen**. De sleutel zorgt dat alleen jullie app kan opslaan.
+6. Klik op **Implementeren** en geef toestemming voor Drive en Sheets.
+7. Kopieer de **web-app-URL**. Die eindigt op `/exec`.
+8. Vul in de app bij Instellingen onder Google Drive de URL en de sleutel in. Tik op **Verbinding testen**.
+
+In je Drive verschijnt een map **Trekker-GPS** met:
+
+- **ISOXML:** per perceel een TASKDATA-zip.
+- **_gegevens:** volledige reservekopie per perceel, om terug te zetten op een tablet.
+- **Trekker-GPS overzicht:** een Google Sheet met één regel per perceel, met datum, klant, oppervlakte en een link naar de ISOXML.
+
+Pas je later `Code.gs` aan, kies dan **Implementaties beheren** en maak een nieuwe versie. De URL blijft dezelfde.
 
 ## Productnaam en vermelding
 
@@ -187,8 +221,8 @@ Machinegegevens zoals hoeveelheden of de werkstand zitten er nog niet in. Daarvo
 
 Voor centimeternauwkeurigheid heb je een LC29H(DA/EA) of ZED-F9P nodig, plus correcties van een basisstation via internet. Dat heet NTRIP. Er zijn twee manieren:
 
-1. **Via de tablet:** de NTRIP-client in AgIO stuurt de correcties over USB of Bluetooth terug. De ESP32 geeft ze door aan de GPS. Dit staat standaard aan.
-2. **Via wifi op de ESP32:** zet `NTRIP_ENABLED` op 1 en vul de gegevens van je gsm-hotspot en caster in `config.h` in.
+1. **Via wifi op de ESP32:** zet `NTRIP_ENABLED` op 1 en vul de gegevens van je gsm-hotspot en caster in `config.h` in. Dit is de manier met de Trekker-GPS app.
+2. **Via AgOpenGPS:** de NTRIP-client in AgIO stuurt de correcties over USB of Bluetooth terug. De ESP32 geeft ze door aan de GPS.
 
 Gebruik er maar één van tegelijk.
 
@@ -204,8 +238,9 @@ Mogelijke correctiediensten:
 2. Open `firmware/trekker_gps/trekker_gps.ino`.
 3. Pas `firmware/trekker_gps/config.h` aan.
 4. Kies het bord "ESP32 Dev Module" en de juiste poort.
-5. Installeer via Bibliotheken beheren: **ESPAsyncWebServer** en **AsyncTCP**, allebei van ESP32Async.
-6. Klik op uploaden.
+5. Kies bij Partition Scheme **Huge APP (3MB No OTA)**. Bluetooth en wifi samen passen niet in de standaardindeling.
+6. Alleen als `WIFI_APP_ENABLED` op 1 staat: installeer via Bibliotheken beheren **ESPAsyncWebServer** en **AsyncTCP**, allebei van ESP32Async.
+7. Klik op uploaden.
 
 Zonder tablet kan je testen met `DEBUG_OUTPUT` op 1. Open de seriële monitor aan 115200 baud. Elke 5 seconden verschijnt dan een regel met het aantal posities per seconde, de fix-kwaliteit en hoeveel zinnen naar de Amatron gingen. Zet de optie terug op 0 voor gebruik met de tablet.
 
@@ -213,7 +248,7 @@ De led op de ESP32 knippert bij elke positie en brandt continu bij een RTK-fix.
 
 ## Voor ontwikkelaars
 
-De app staat in `app/src`: `brand.js` voor naam en versie, `app.js` voor het scherm en losse modules voor NMEA, geometrie, ISOXML en ZIP. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist/index.html` en `firmware/trekker_gps/web_app.h`:
+De app staat in `app/src`: `brand.js` voor naam en versie, `app.js` voor het scherm, `store.js` voor de opslag op de tablet, `sync.js` voor Google Drive en losse modules voor NMEA, geometrie, ISOXML en ZIP. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist` en `firmware/trekker_gps/web_app.h`:
 
 ```
 python3 tools/build_web.py
@@ -223,15 +258,19 @@ Tests:
 
 ```
 g++ -std=c++17 -Wall -Wextra -I firmware/trekker_gps test/test_nmea.cpp -o test_nmea && ./test_nmea
-node --test test/app.test.js
+node --test test/app.test.js test/drive_script.test.js
 NODE_PATH=$(npm root -g) node test/e2e_demo.cjs
 ```
 
-De laatste test rijdt met de demo-tractor door de app in een echte browser en controleert de ISOXML-export. Daarvoor is Playwright nodig.
+De laatste test rijdt met de demo-tractor door de app in een echte browser. Hij controleert de percelen, het bewaren na herladen, de ISOXML-export en de opslag in een nagebootste Drive. Daarvoor is Playwright nodig.
+
+Bij elke push naar GitHub draaien de tests automatisch. Op de hoofdbranch wordt de app daarna gepubliceerd op GitHub Pages. Zet dat één keer aan via Settings, Pages, Source: **GitHub Actions**.
 
 ## Nog na te kijken op de echte hardware
 
 - De pinnen van de seriële aansluiting op jouw Amatron 3-kabel.
 - Of je Amatron-versie `$GNGGA` aanvaardt of `$GPGGA` nodig heeft.
 - Of de Amatron 3 of je bedrijfssoftware de ISOXML-export van de app zonder fouten inleest.
+- De Bluetooth-verbinding tussen de ESP32 en de tablet.
+- De Drive-koppeling met een echt Google-account.
 - De LC29H-instelcommando's (`PAIR050` en `PAIR062`). Ze volgen de Quectel-documentatie, maar zijn nog niet op een echte module getest.

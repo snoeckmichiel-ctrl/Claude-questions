@@ -7,6 +7,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Trekker-GPS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root {
   --bg: #eef1ed; --surface: #ffffff; --surface-2: #f5f7f4; --text: #18201b; --muted: #5f6b63;
@@ -38,6 +41,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
   font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -73,9 +77,13 @@ button:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 #fix[data-q="poor"]::before { background: var(--poor); }
 #conn[data-state="ok"] .ic { color: var(--good); }
 #conn[data-state="bad"] .ic { color: var(--none); }
+#sync[data-state="ok"] .ic { color: var(--good); }
+#sync[data-state="busy"] .ic { color: var(--fair); }
+#sync[data-state="bad"] .ic { color: var(--none); }
+#sync[data-state="off"] .ic { color: var(--muted); }
 @media (max-width: 760px) {
   .brand-name { display: none; }
-  #sats { display: none; }
+  #sats, #syncLabel { display: none; }
   #fieldBtn { max-width: 40vw; }
 }
 
@@ -148,7 +156,7 @@ button:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 #welcome.waiting .spinner { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
 .opt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px; min-height: 96px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); font-weight: 600; }
 .opt .ic { width: 28px; height: 28px; color: var(--brand-2); }
@@ -193,6 +201,23 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
 .note { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted);
   font-size: 0.9rem; margin-top: 14px; }
 .note .ic { width: 20px; height: 20px; color: var(--brand-2); margin-top: 1px; }
+.hint { margin: 10px 0 0; color: var(--muted); font-size: 0.9rem; }
+.hint.ok { color: var(--good); }
+.hint.bad { color: var(--none); }
+.job { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); margin-bottom: 8px; }
+.job.current { border-color: var(--brand-2); box-shadow: inset 0 0 0 1px var(--brand-2); }
+.job h4 { margin: 0; font-size: 1rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.job .meta { color: var(--muted); font-size: 0.86rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.job .btns { display: flex; gap: 6px; }
+.job .btns .icon-btn { background: var(--surface); border: 1px solid var(--line); }
+.job .btns .btn { min-height: 44px; padding: 8px 14px; }
+.badge { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface);
+  border: 1px solid var(--line); color: var(--muted); }
+.badge.active { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.badge.ok { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.badge.wait { color: #9a6a00; border-color: color-mix(in srgb, var(--fair) 50%, var(--line)); }
+.empty { color: var(--muted); text-align: center; padding: 16px 0; }
 .about { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
 .about b { color: var(--text); }
 #askText { margin: 12px 0 0; color: var(--muted); }
@@ -219,6 +244,10 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
   <symbol id="i-demo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+  <symbol id="i-bt" viewBox="0 0 24 24"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></symbol>
+  <symbol id="i-fields" viewBox="0 0 24 24"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5zM9 4v13.5M15 6.5V20"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 19h10.5a4 4 0 0 0 .4-7.98A6 6 0 0 0 6.2 10 4.5 4.5 0 0 0 7 19z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></symbol>
 </svg>
 
@@ -229,6 +258,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
     <div class="chips">
       <span class="chip" id="fix" data-q="none">Geen fix</span>
       <span class="chip" id="sats"><span id="satsValue">–</span> sat</span>
+      <span class="chip" id="sync" data-state="off" hidden><svg class="ic"><use href="#i-cloud"/></svg><span id="syncLabel">Drive</span></span>
       <span class="chip" id="conn" data-state="off"><svg class="ic"><use href="#i-wifi"/></svg><span id="connLabel">Offline</span></span>
     </div>
   </header>
@@ -258,7 +288,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
     <nav id="actions" class="card" aria-label="Acties">
       <button class="act" id="btnBoundary"><svg class="ic"><use href="#i-boundary"/></svg>Grens</button>
       <button id="btnWork"><svg class="ic fill"><use href="#i-play"/></svg><span>Start werk</span></button>
-      <button class="act" id="btnExport"><svg class="ic"><use href="#i-export"/></svg>Exporteer</button>
+      <button class="act" id="btnJobs"><svg class="ic"><use href="#i-fields"/></svg>Percelen</button>
       <button class="act" id="btnSettings"><svg class="ic"><use href="#i-menu"/></svg>Instellingen</button>
     </nav>
 
@@ -269,7 +299,8 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
         <p id="welcomeText">Kies hoe deze tablet het GPS-signaal ontvangt.</p>
         <div class="spinner"></div>
         <div class="options" id="welcomeOptions">
-          <button class="opt" id="welWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi<small>GPS-kastje</small></button>
+          <button class="opt" id="welBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth<small>GPS-kastje</small></button>
+          <button class="opt" id="welWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi<small>via het kastje</small></button>
           <button class="opt" id="welUsb"><svg class="ic"><use href="#i-usb"/></svg>USB<small>kabel</small></button>
           <button class="opt" id="welDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo<small>uitproberen</small></button>
         </div>
@@ -290,6 +321,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
           <label>Klant <input id="setCustomer" autocomplete="off" maxlength="60"></label>
           <label>Bedrijf <input id="setFarm" autocomplete="off" maxlength="60"></label>
         </div>
+        <button type="button" class="btn danger block" id="clearBoundary" style="margin-top:10px">Grens van dit perceel wissen</button>
       </div>
       <div class="section">
         <h3>Werktuig</h3>
@@ -300,6 +332,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
       <div class="section">
         <h3>GPS-verbinding</h3>
         <div class="options">
+          <button type="button" class="opt" id="connBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth</button>
           <button type="button" class="opt" id="connWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi</button>
           <button type="button" class="opt" id="connUsb"><svg class="ic"><use href="#i-usb"/></svg>USB</button>
           <button type="button" class="opt" id="connDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo</button>
@@ -317,15 +350,38 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
         </div>
       </div>
       <div class="section">
-        <h3>Gegevens</h3>
-        <div class="row2">
-          <button type="button" class="btn danger" id="clearBoundary">Grens wissen</button>
-          <button type="button" class="btn danger" id="newField">Nieuw perceel</button>
+        <h3>Google Drive</h3>
+        <div class="fields">
+          <label class="wide">Adres van de Drive-koppeling <input id="setDriveUrl" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec"></label>
+          <label class="wide">Sleutel <input id="setDriveKey" autocomplete="off" type="password"></label>
         </div>
+        <div class="row2" style="margin-top:10px">
+          <button type="button" class="btn" id="driveTest">Verbinding testen</button>
+          <button type="button" class="btn" id="driveSync">Nu opslaan</button>
+        </div>
+        <p class="hint" id="driveStatus">Nog niet ingesteld. De percelen blijven op deze tablet bewaard.</p>
       </div>
       <div class="section">
         <h3>Over</h3>
         <div class="about" id="aboutText"></div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="jobsDialog">
+  <form method="dialog" class="sheet">
+    <header><h2>Percelen</h2><button class="icon-btn" value="close" aria-label="Sluiten"><svg class="ic"><use href="#i-close"/></svg></button></header>
+    <div class="body">
+      <button type="button" class="btn primary block" id="newJob" style="margin-top:12px">Nieuw perceel</button>
+      <div class="section">
+        <h3>Op deze tablet</h3>
+        <div id="jobList"></div>
+      </div>
+      <div class="section" id="remoteSection">
+        <h3>In Google Drive</h3>
+        <button type="button" class="btn block" id="driveRestore">Percelen uit Drive tonen</button>
+        <div id="remoteList" style="margin-top:10px"></div>
       </div>
     </div>
   </form>

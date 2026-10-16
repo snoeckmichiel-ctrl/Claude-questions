@@ -1,0 +1,49 @@
+name: App testen en publiceren
+
+on:
+  push:
+    paths:
+      - 'app/**'
+      - 'drive/**'
+      - 'test/**'
+      - 'tools/build_web.py'
+      - '.github/workflows/app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests van de rekenmodules en het Drive-script
+        run: node --test test/app.test.js test/drive_script.test.js
+      - name: App bouwen
+        run: python3 tools/build_web.py
+      - name: Controleren dat de gebouwde app in de repo actueel is
+        run: git diff --exit-code app/dist firmware/trekker_gps/web_app.h
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  publish:
+    needs: test
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

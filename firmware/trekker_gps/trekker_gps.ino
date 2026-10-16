@@ -1,7 +1,7 @@
 // trekker_gps.ino
 //
 // Leest NMEA van een Quectel LC29H en verdeelt het over:
-//   - de tablet via de Trekker-GPS app over wifi, USB en/of Bluetooth (alle zinnen),
+//   - de tablet: Trekker-GPS app via Bluetooth LE of wifi, of andere apps via USB of Bluetooth (alle zinnen),
 //   - de Amazone Amatron 3 via RS232 (GGA, VTG, GSA aan 19200 baud).
 // RTCM-correcties komen van de tablet of van de ingebouwde NTRIP-client.
 //
@@ -14,6 +14,21 @@
 #if TABLET_BT_ENABLED
 #include <BluetoothSerial.h>
 BluetoothSerial SerialBT;
+#endif
+
+#if BLE_ENABLED
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
+// Nordic UART-dienst: een bekende standaard om tekst over BLE te sturen.
+#define NUS_SERVICE "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+#define NUS_TX      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+static BLEServer* bleServer = nullptr;
+static BLECharacteristic* bleTx = nullptr;
+static volatile bool bleConnected = false;
+static volatile uint16_t bleConnId = 0;
+static char bleBuf[1024];
+static size_t bleLen = 0;
 #endif
 
 #if NTRIP_ENABLED || WIFI_APP_ENABLED
@@ -117,7 +132,63 @@ static void setupWebApp() {
 }
 #endif
 
+#if BLE_ENABLED
+class BleCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer*, esp_ble_gatts_cb_param_t* param) override {
+    bleConnId = param->connect.conn_id;
+    bleConnected = true;
+  }
+  void onDisconnect(BLEServer*) override {
+    bleConnected = false;
+    BLEDevice::startAdvertising();  // meteen weer zichtbaar voor de tablet
+  }
+};
+
+static void setupBle() {
+  BLEDevice::init(BLE_NAME);
+  BLEDevice::setMTU(247);
+  bleServer = BLEDevice::createServer();
+  bleServer->setCallbacks(new BleCallbacks());
+  BLEService* svc = bleServer->createService(NUS_SERVICE);
+  bleTx = svc->createCharacteristic(NUS_TX, BLECharacteristic::PROPERTY_NOTIFY);
+  bleTx->addDescriptor(new BLE2902());
+  svc->start();
+  BLEAdvertising* adv = BLEDevice::getAdvertising();
+  adv->addServiceUUID(NUS_SERVICE);
+  adv->setScanResponse(true);
+  BLEDevice::startAdvertising();
+  DBG("Bluetooth zichtbaar als %s", BLE_NAME);
+}
+
+// Gebundelde zinnen versturen in stukken die in één BLE-bericht passen.
+static void bleFlush() {
+  if (!bleConnected) { bleLen = 0; return; }
+  uint16_t mtu = bleServer->getPeerMTU(bleConnId);
+  size_t chunk = (mtu > 23 ? mtu : 23) - 3;
+  if (chunk > 244) chunk = 244;
+  for (size_t off = 0; off < bleLen; off += chunk) {
+    size_t n = bleLen - off < chunk ? bleLen - off : chunk;
+    bleTx->setValue((uint8_t*)bleBuf + off, n);
+    bleTx->notify();
+  }
+  bleLen = 0;
+}
+
+static void bleQueue(const char* line, size_t len) {
+  if (!bleConnected) return;
+  if (bleLen + len + 2 > sizeof bleBuf) bleFlush();
+  if (len + 2 > sizeof bleBuf) return;
+  memcpy(bleBuf + bleLen, line, len);
+  bleBuf[bleLen + len] = '\r';
+  bleBuf[bleLen + len + 1] = '\n';
+  bleLen += len + 2;
+}
+#endif
+
 static void sendToTablet(const char* line, size_t len) {
+#if BLE_ENABLED
+  bleQueue(line, len);
+#endif
 #if WIFI_APP_ENABLED
   wsQueue(line, len);
 #endif
@@ -312,6 +383,10 @@ void setup() {
   SerialBT.begin(TABLET_BT_NAME);
 #endif
 
+#if BLE_ENABLED
+  setupBle();
+#endif
+
 #if WIFI_APP_ENABLED && NTRIP_ENABLED
   WiFi.mode(WIFI_AP_STA);  // eigen netwerk voor de tablet + internet via gsm-hotspot
 #elif WIFI_APP_ENABLED
@@ -349,6 +424,11 @@ void loop() {
 #endif
 
   updateLed();
+
+#if BLE_ENABLED
+  static unsigned long lastBleFlush = 0;
+  if (millis() - lastBleFlush >= 100) { lastBleFlush = millis(); bleFlush(); }
+#endif
 
 #if WIFI_APP_ENABLED
   static unsigned long lastWsFlush = 0, lastWsCleanup = 0;

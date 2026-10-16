@@ -48,11 +48,20 @@
 #define TABLET_FORWARD_RTCM 1
 
 // ---------------------------------------------------------------------------
-// Trekker-GPS app via wifi. Het kastje maakt een eigen wifinetwerk.
-// Verbind de tablet ermee en open http://192.168.4.1 in de browser.
+// Bluetooth Low Energy voor de online Trekker-GPS app (aanbevolen).
+// De tablet houdt zo zijn eigen internet voor Google Drive.
+// Werkt met Chrome op Android, Windows en Chromebook. Geen koppeling nodig in
+// de instellingen van de tablet: de app vraagt het kastje zelf.
+// ---------------------------------------------------------------------------
+#define BLE_ENABLED      1
+#define BLE_NAME         "Trekker-GPS"
+
+// ---------------------------------------------------------------------------
+// Reserve: de app via het eigen wifinetwerk van het kastje (http://192.168.4.1).
+// Handig zonder internet of op een iPad, maar dan geen Google Drive.
 // Vraagt de bibliotheken "ESPAsyncWebServer" en "AsyncTCP" van ESP32Async.
 // ---------------------------------------------------------------------------
-#define WIFI_APP_ENABLED 1
+#define WIFI_APP_ENABLED 0
 #define WIFI_AP_SSID     "Trekker-GPS"
 #define WIFI_AP_PASSWORD "trekker123"  // minstens 8 tekens, verander dit
 
