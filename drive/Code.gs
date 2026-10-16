@@ -10,6 +10,9 @@
  *   ISOXML/       per perceel een TASKDATA-zip voor de terminal of bedrijfssoftware
  *   _gegevens/    volledige reservekopie per perceel, om terug te zetten op een tablet
  *   Overzicht     Google Sheet met één regel per perceel
+ *
+ * Het GPS-kastje meldt hier ook zijn adres in de hotspot van de tablet, zodat de
+ * app het kastje meteen vindt.
  */
 
 const SLEUTEL = 'verander-dit-in-een-eigen-geheim';  // zelfde sleutel als in de app
@@ -17,8 +20,20 @@ const MAP_NAAM = 'Trekker-GPS';
 const KOLOMMEN = ['Datum', 'Perceel', 'Klant', 'Bedrijf', 'Oppervlakte (ha)', 'Bewerkt (ha)',
   'Werkbreedte (m)', 'Laatst bijgewerkt', 'ISOXML', 'ID'];
 
-function doGet() {
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action === 'announce') return antwoord(meldKastje(p));
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif">De Drive-koppeling van Trekker-GPS werkt.</p>');
+}
+
+// Het kastje meldt zijn adres, bv. 192.168.57.200.
+function meldKastje(p) {
+  if (p.key !== SLEUTEL) return { ok: false, error: 'Verkeerde sleutel' };
+  const ip = String(p.ip || '');
+  if (!/^(10|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return { ok: false, error: 'Ongeldig adres' };
+  PropertiesService.getScriptProperties().setProperty('kastje',
+    JSON.stringify({ ip: ip, version: String(p.version || '').slice(0, 20), at: Date.now() }));
+  return { ok: true };
 }
 
 function doPost(e) {
@@ -30,6 +45,7 @@ function doPost(e) {
       case 'save': return antwoord(bewaar(req));
       case 'list': return antwoord({ ok: true, jobs: lijst() });
       case 'get': return antwoord(haalOp(req.id));
+      case 'whereis': return antwoord({ ok: true, box: JSON.parse(PropertiesService.getScriptProperties().getProperty('kastje') || 'null') });
       default: return antwoord({ ok: false, error: 'Onbekende actie' });
     }
   } catch (err) {

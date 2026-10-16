@@ -132,3 +132,35 @@ test('ZIP: bestand is leesbaar met een standaard unzip', () => {
   assert.deepStrictEqual(out, ['TASKDATA/TASKDATA.XML', 'TASKDATA/TLG00001.BIN', 'TASKDATA/TLG00001.XML']);
   assert.strictEqual(zip.crc32(new TextEncoder().encode('123456789')), 0xCBF43926);
 });
+
+const box = require('../app/src/box.js');
+
+test('Kastje: GPS-stroom (Server-Sent Events) lezen, ook in stukken', () => {
+  const full = 'event: nmea\ndata: $GNGGA,1*00\ndata: $GNVTG,2*00\nid: 5\n\n: commentaar\n\nevent: nmea\r\ndata: $GNRMC,3*00\r\n\r\nevent: nmea\ndata: half';
+  const r = box.parseSse(full);
+  assert.deepStrictEqual(r.events, [
+    { event: 'nmea', data: '$GNGGA,1*00\n$GNVTG,2*00' },
+    { event: 'nmea', data: '$GNRMC,3*00' },
+  ]);
+  assert.strictEqual(r.rest, 'event: nmea\ndata: half');
+  const r2 = box.parseSse(r.rest + ' en rest\n\n');
+  assert.deepStrictEqual(r2.events, [{ event: 'nmea', data: 'half en rest' }]);
+});
+
+test('Kastje: zoekadressen in de hotspot', () => {
+  const c = box.scanCandidates();
+  assert.strictEqual(c.length, 256);
+  assert.strictEqual(c[0], '192.168.0.200');
+  assert.strictEqual(c[43], '192.168.43.200');
+  assert.strictEqual(c[255], '192.168.255.200');
+});
+
+test('Kastje: lokaal netwerk alleen aankondigen bij een privé-adres vanuit de online app', () => {
+  global.location = { protocol: 'https:' };
+  assert.strictEqual(box.fetchOptions('192.168.57.200').targetAddressSpace, 'local');
+  assert.strictEqual(box.fetchOptions('172.20.1.200').targetAddressSpace, 'local');
+  assert.strictEqual(box.fetchOptions('127.0.0.1:8080').targetAddressSpace, undefined);
+  global.location = { protocol: 'http:' };
+  assert.strictEqual(box.fetchOptions('192.168.57.200').targetAddressSpace, undefined);
+  delete global.location;
+});

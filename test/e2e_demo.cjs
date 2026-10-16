@@ -16,6 +16,36 @@ function check(cond, msg) {
 }
 
 // Nagebootste Apps Script: zelfde acties, met een omleiding zoals Google die doet.
+const whereis = { ip: '' };
+
+// Nagebootst GPS-kastje: /api/info en een NMEA-stroom op /events, met CORS zoals de firmware.
+function boxMock() {
+  const demo = require('../app/src/demo.js');
+  const clients = new Set();
+  const tractor = new demo.DemoTractor(text => {
+    const data = text.trim().split(/\r?\n/).map(l => 'data: ' + l).join('\n');
+    for (const res of clients) res.write('event: nmea\n' + data + '\nid: 1\n\n');
+  }, { quality: 4 });
+  const server = http.createServer((req, res) => {
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Private-Network': 'true' };
+    if (req.url === '/api/info') {
+      res.writeHead(200, Object.assign({ 'Content-Type': 'application/json' }, cors));
+      res.end(JSON.stringify({ name: 'Trekker-GPS', version: 'test', fix: 4 }));
+    } else if (req.url === '/events') {
+      res.writeHead(200, Object.assign({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }, cors));
+      res.write('retry: 1000\n\n');
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+    } else { res.writeHead(404, cors); res.end(); }
+  });
+  return {
+    server, clients,
+    start() { tractor.start(); },
+    stop() { tractor.stop(); },
+    dropAll() { for (const res of clients) res.destroy(); clients.clear(); },
+  };
+}
+
 function driveMock() {
   const saved = new Map();
   const calls = [];
@@ -40,6 +70,7 @@ function driveMock() {
       else if (b.action === 'save') { saved.set(b.job.id, b); out = { ok: true }; }
       else if (b.action === 'list') out = { ok: true, jobs: [...saved.values()].map(s => s.summary) };
       else if (b.action === 'get') out = { ok: true, job: saved.get(b.id).job };
+      else if (b.action === 'whereis') out = { ok: true, box: whereis.ip ? { ip: whereis.ip, at: Date.now() } : null };
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify(out));
       return;
@@ -214,6 +245,59 @@ print(json.dumps({"names": sorted(z.namelist()), "pnt": len(root.findall("./PFD/
   check(restored.boundary.length === st1.boundary.length && restored.log.length === st2.log.length,
     'teruggehaald perceel is volledig');
   await ctx2.close();
+
+  // Hotspot: de app vindt het nagebootste kastje en leest de GPS-stroom.
+  const boxSim = boxMock();
+  await new Promise(r => boxSim.server.listen(0, '127.0.0.1', r));
+  boxSim.start();
+  const boxHost = '127.0.0.1:' + boxSim.server.address().port;
+
+  const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page3 = await ctx3.newPage();
+  page3.on('pageerror', e => errors.push('hotspot: ' + e));
+  await page3.goto(url);
+  await page3.evaluate(() => TG.ready);
+  check(await page3.isVisible('#welHotspot'), 'Hotspot staat als eerste keuze op het welkomstscherm');
+  await page3.click('#fieldBtn');
+  await page3.fill('#setHost', boxHost);
+  await page3.click('#settings button[value="close"]');
+  await page3.click('#welHotspot');
+  await page3.waitForFunction(() => document.getElementById('fix').textContent === 'RTK fix', null, { timeout: 15000 });
+  check(await page3.textContent('#connLabel') === 'Hotspot', 'verbonden via hotspot');
+  check(!(await page3.isVisible('#welcome')), 'kaart zichtbaar na verbinden');
+  await page3.waitForTimeout(1500);
+  const pos1 = await page3.evaluate(() => TG.appState().last);
+  check(pos1 && pos1.quality === 4 && pos1.lat > 51, 'positie komt binnen via de hotspot');
+
+  // Verbinding valt weg (kastje herstart): de app verbindt vanzelf opnieuw.
+  boxSim.dropAll();
+  await page3.waitForFunction(() => document.getElementById('connLabel').textContent !== 'Hotspot', null, { timeout: 10000 })
+    .catch(() => {});
+  await page3.waitForFunction(() => document.getElementById('connLabel').textContent === 'Hotspot', null, { timeout: 15000 });
+  const n1 = await page3.evaluate(() => TG.appState().last.timeUtc);
+  await page3.waitForTimeout(1500);
+  const n2 = await page3.evaluate(() => TG.appState().last.timeUtc);
+  check(n2 !== n1, 'GPS-stroom loopt weer na verbreken');
+  await page3.screenshot({ path: path.join(outDir, '9-hotspot.png') });
+  await ctx3.close();
+
+  // Nieuw hotspotbereik: geen gekend adres, de app vraagt het adres op bij Drive.
+  whereis.ip = boxHost;
+  const ctx4 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page4 = await ctx4.newPage();
+  page4.on('pageerror', e => errors.push('drive-adres: ' + e));
+  await page4.goto(url);
+  await page4.evaluate(() => TG.ready);
+  await page4.click('#fieldBtn');
+  await page4.fill('#setDriveUrl', driveUrl);
+  await page4.fill('#setDriveKey', 'geheim');
+  await page4.click('#settings button[value="close"]');
+  await page4.click('#welHotspot');
+  await page4.waitForFunction(() => document.getElementById('fix').textContent === 'RTK fix', null, { timeout: 20000 });
+  check(await page4.evaluate(() => TG.appState().settings.boxHost) === boxHost, 'kastje gevonden via het adres in Drive');
+  await ctx4.close();
+  boxSim.stop();
+  boxSim.server.close();
 
   // Nachtmodus en andere schermen
   await page.click('#btnSettings');

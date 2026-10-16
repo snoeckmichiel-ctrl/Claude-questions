@@ -299,8 +299,8 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
         <p id="welcomeText">Kies hoe deze tablet het GPS-signaal ontvangt.</p>
         <div class="spinner"></div>
         <div class="options" id="welcomeOptions">
+          <button class="opt" id="welHotspot"><svg class="ic"><use href="#i-wifi"/></svg>Hotspot<small>van de tablet</small></button>
           <button class="opt" id="welBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth<small>GPS-kastje</small></button>
-          <button class="opt" id="welWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi<small>via het kastje</small></button>
           <button class="opt" id="welUsb"><svg class="ic"><use href="#i-usb"/></svg>USB<small>kabel</small></button>
           <button class="opt" id="welDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo<small>uitproberen</small></button>
         </div>
@@ -332,13 +332,13 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
       <div class="section">
         <h3>GPS-verbinding</h3>
         <div class="options">
+          <button type="button" class="opt" id="connHotspot"><svg class="ic"><use href="#i-wifi"/></svg>Hotspot</button>
           <button type="button" class="opt" id="connBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth</button>
-          <button type="button" class="opt" id="connWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi</button>
           <button type="button" class="opt" id="connUsb"><svg class="ic"><use href="#i-usb"/></svg>USB</button>
           <button type="button" class="opt" id="connDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo</button>
         </div>
         <div class="fields" style="margin-top:10px">
-          <label class="wide">Adres GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
+          <label class="wide">Adres GPS-kastje <input id="setHost" autocomplete="off" placeholder="Automatisch zoeken"></label>
         </div>
       </div>
       <div class="section">

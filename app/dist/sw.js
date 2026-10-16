@@ -1,5 +1,5 @@
 // sw.js - laat de app openen zonder internet. Eerst het netwerk, anders de bewaarde kopie.
-const CACHE = 'trekkergps-fbb7113d4784';
+const CACHE = 'trekkergps-c21bc392149b';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {

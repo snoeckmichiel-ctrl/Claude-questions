@@ -135,3 +135,20 @@ test('Drive-script: bewaren, overzicht, lijst en terughalen', () => {
   assert.strictEqual(got.job.name, 'Weide');
   assert.strictEqual(post({ action: 'get', id: '../../x' }).ok, false);
 });
+
+test('Drive-script: kastje meldt zijn adres, app vraagt het op', () => {
+  const { post, ctx } = load();
+  const KEY = vm.runInContext('SLEUTEL', ctx);
+  assert.strictEqual(post({ action: 'whereis' }).box, null);
+  const bad = JSON.parse(ctx.doGet({ parameter: { action: 'announce', key: 'fout', ip: '192.168.57.200' } }).text);
+  assert.strictEqual(bad.ok, false);
+  const weird = JSON.parse(ctx.doGet({ parameter: { action: 'announce', key: KEY, ip: '8.8.8.8' } }).text);
+  assert.strictEqual(weird.ok, false);
+  const good = JSON.parse(ctx.doGet({ parameter: { action: 'announce', key: KEY, ip: '192.168.57.200', version: '0.3.0' } }).text);
+  assert.strictEqual(good.ok, true);
+  const w = post({ action: 'whereis' });
+  assert.strictEqual(w.box.ip, '192.168.57.200');
+  assert.strictEqual(w.box.version, '0.3.0');
+  assert.ok(Date.now() - w.box.at < 5000);
+  assert.strictEqual(ctx.doGet({ parameter: {} }).includes('werkt'), true);
+});

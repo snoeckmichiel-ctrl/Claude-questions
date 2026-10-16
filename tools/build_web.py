@@ -14,7 +14,7 @@ import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "app" / "src"
-ORDER = ["brand.js", "nmea.js", "geo.js", "isoxml.js", "zip.js", "store.js", "sync.js", "demo.js", "app.js"]
+ORDER = ["brand.js", "nmea.js", "geo.js", "isoxml.js", "zip.js", "store.js", "sync.js", "box.js", "demo.js", "app.js"]
 
 
 def main() -> None:

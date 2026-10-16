@@ -299,8 +299,8 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
         <p id="welcomeText">Kies hoe deze tablet het GPS-signaal ontvangt.</p>
         <div class="spinner"></div>
         <div class="options" id="welcomeOptions">
+          <button class="opt" id="welHotspot"><svg class="ic"><use href="#i-wifi"/></svg>Hotspot<small>van de tablet</small></button>
           <button class="opt" id="welBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth<small>GPS-kastje</small></button>
-          <button class="opt" id="welWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi<small>via het kastje</small></button>
           <button class="opt" id="welUsb"><svg class="ic"><use href="#i-usb"/></svg>USB<small>kabel</small></button>
           <button class="opt" id="welDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo<small>uitproberen</small></button>
         </div>
@@ -332,13 +332,13 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
       <div class="section">
         <h3>GPS-verbinding</h3>
         <div class="options">
+          <button type="button" class="opt" id="connHotspot"><svg class="ic"><use href="#i-wifi"/></svg>Hotspot</button>
           <button type="button" class="opt" id="connBle"><svg class="ic"><use href="#i-bt"/></svg>Bluetooth</button>
-          <button type="button" class="opt" id="connWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi</button>
           <button type="button" class="opt" id="connUsb"><svg class="ic"><use href="#i-usb"/></svg>USB</button>
           <button type="button" class="opt" id="connDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo</button>
         </div>
         <div class="fields" style="margin-top:10px">
-          <label class="wide">Adres GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
+          <label class="wide">Adres GPS-kastje <input id="setHost" autocomplete="off" placeholder="Automatisch zoeken"></label>
         </div>
       </div>
       <div class="section">
@@ -1139,6 +1139,186 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
 })(this);
 </script>
 <script>
+// box.js - het GPS-kastje vinden in de hotspot van de tablet en de GPS-stroom lezen.
+//
+// Android kiest bij elke start van de hotspot een ander adresbereik. Het kastje neemt
+// daarin altijd het adres dat op .200 eindigt. De app zoekt in deze volgorde:
+//   1. het adres dat je zelf invulde
+//   2. het adres van de pagina, als de app via het kastje geopend werd
+//   3. het laatst gekende adres
+//   4. het adres dat het kastje meldde aan je Drive-koppeling
+//   5. alle adressen 192.168.0.200 tot 192.168.255.200
+(function (root) {
+  'use strict';
+
+  const HOST_OCTET = 200;
+
+  // Leest Server-Sent Events uit een tekstbuffer. Geeft de volledige berichten en de rest terug.
+  function parseSse(buffer) {
+    const events = [];
+    const parts = buffer.replace(/\r\n/g, '\n').split('\n\n');
+    const rest = parts.pop();
+    for (const part of parts) {
+      let event = 'message';
+      const data = [];
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+      }
+      if (data.length) events.push({ event, data: data.join('\n') });
+    }
+    return { events, rest };
+  }
+
+  function scanCandidates(octet) {
+    const list = [];
+    for (let i = 0; i < 256; i++) list.push('192.168.' + i + '.' + (octet || HOST_OCTET));
+    return list;
+  }
+
+  // Online app (https) naar een privé-adres: Chrome laat dat toe als lokaal netwerk.
+  // Alleen dan aankondigen, anders blokkeert Chrome een verzoek dat niet overeenkomt.
+  function fetchOptions(host, extra) {
+    const o = Object.assign({ cache: 'no-store' }, extra);
+    const ip = String(host).split(':')[0];
+    const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+    if (typeof location !== 'undefined' && location.protocol === 'https:' && isPrivate) o.targetAddressSpace = 'local';
+    return o;
+  }
+
+  function uniq(list) {
+    const seen = new Set();
+    return list.filter(x => x && !seen.has(x) && seen.add(x));
+  }
+
+  class BoxLink {
+    /**
+     * opts = {
+     *   onText(text)            NMEA-tekst
+     *   onState(state, detail)  'searching' | 'connecting' | 'ok' | 'lost' | 'notfound'
+     *   whereis()               belofte met het adres uit Drive, of null
+     * }
+     */
+    constructor(opts) {
+      this.o = opts;
+      this.closed = false;
+      this.host = '';
+      this.abort = null;
+      this.retry = null;
+    }
+
+    async probe(host, timeoutMs) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs || 2500);
+      try {
+        const res = await fetch('http://' + host + '/api/info', fetchOptions(host, { signal: ctrl.signal }));
+        if (!res.ok) return null;
+        const info = await res.json();
+        return info && info.name === 'Trekker-GPS' ? info : null;
+      } catch (e) {
+        return null;
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    async discover(known) {
+      const quick = uniq(known);
+      for (const h of quick) {
+        if (this.closed) return null;
+        this.state('searching', 'Proberen: ' + h);
+        if (await this.probe(h)) return h;
+      }
+      if (this.o.whereis) {
+        this.state('searching', 'Adres opvragen bij Google Drive');
+        try {
+          const ip = await this.o.whereis();
+          if (ip && !quick.includes(ip) && await this.probe(ip)) return ip;
+        } catch (e) { /* geen internet of Drive niet ingesteld */ }
+      }
+      const all = scanCandidates();
+      const batch = 32;
+      for (let i = 0; i < all.length && !this.closed; i += batch) {
+        this.state('searching', 'Zoeken in de hotspot: ' + Math.min(100, Math.round(i / all.length * 100)) + '%');
+        const slice = all.slice(i, i + batch);
+        const found = await new Promise(resolve => {
+          let left = slice.length;
+          slice.forEach(h => this.probe(h, 1500).then(info => {
+            if (info) resolve(h);
+            else if (--left === 0) resolve(null);
+          }));
+        });
+        if (found) return found;
+      }
+      return null;
+    }
+
+    // Zoekt het kastje en blijft verbonden. Bij verlies opnieuw zoeken.
+    async start(known) {
+      this.closed = false;
+      const host = await this.discover(known);
+      if (this.closed) return;
+      if (!host) {
+        this.state('notfound', 'Kastje niet gevonden');
+        this.retry = setTimeout(() => this.start(known), 10000);
+        return;
+      }
+      this.host = host;
+      this.stream(host, known);
+    }
+
+    async stream(host, known) {
+      let failures = 0;
+      while (!this.closed) {
+        this.state('connecting', host);
+        this.abort = new AbortController();
+        try {
+          const res = await fetch('http://' + host + '/events', fetchOptions(host, {
+            signal: this.abort.signal, headers: { Accept: 'text/event-stream' },
+          }));
+          if (!res.ok || !res.body) throw new Error('status ' + res.status);
+          this.state('ok', host);
+          failures = 0;
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const r = parseSse(buf);
+            buf = r.rest;
+            for (const ev of r.events) if (ev.event === 'nmea') this.o.onText(ev.data + '\n');
+            if (buf.length > 65536) buf = '';
+          }
+        } catch (e) { /* verbinding weg */ }
+        if (this.closed) return;
+        failures++;
+        this.state('lost', host);
+        if (failures >= 4) {
+          // Waarschijnlijk een nieuw hotspotbereik: opnieuw zoeken.
+          this.start([host].concat(known || []));
+          return;
+        }
+        await new Promise(r => { this.retry = setTimeout(r, 2000); });
+      }
+    }
+
+    state(s, detail) { if (this.o.onState) this.o.onState(s, detail); }
+
+    close() {
+      this.closed = true;
+      clearTimeout(this.retry);
+      if (this.abort) this.abort.abort();
+    }
+  }
+
+  const api = { BoxLink, parseSse, scanCandidates, fetchOptions, HOST_OCTET };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { box: api });
+})(this);
+</script>
+<script>
 // demo.js - simuleert een tractor die een perceel heen en weer afrijdt.
 // Maakt echte NMEA-zinnen, zodat de hele app getest wordt zoals met een GPS.
 (function (root) {
@@ -1251,7 +1431,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
 
   // ---------------------------------------------------------------- toestand
   const settings = {
-    defaultWidth: 12, host: '', connection: '', theme: 'auto',
+    defaultWidth: 12, host: '', boxHost: '', connection: '', theme: 'auto',
     driveUrl: '', driveKey: '', bleId: '', lastCustomer: '', lastFarm: '',
   };
   const store = new T.store.Store(geo);
@@ -1477,31 +1657,43 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
     return false;
   }
 
-  function connectWifi() {
-    if (location.protocol === 'https:') {
-      toast('Wifi werkt alleen als je de app opent via het kastje zelf: http://192.168.4.1');
-      return;
-    }
+  // Via de hotspot van de tablet (of het eigen wifinetwerk van het kastje).
+  function connectHotspot() {
     disconnect();
-    const host = settings.host || location.host || '192.168.4.1';
-    let ws = null, closed = false, retry = null;
-    const open = () => {
-      setConn('Verbinden', 'off', 'i-wifi');
-      try { ws = new WebSocket('ws://' + host + '/ws'); } catch (e) { ws = null; }
-      if (!ws) { retry = setTimeout(open, 3000); return; }
-      ws.onopen = () => setConn('Wifi', 'ok', 'i-wifi');
-      ws.onmessage = ev => { if (typeof ev.data === 'string') parser.feed(ev.data); };
-      ws.onclose = () => {
-        if (closed) return;
-        setConn('Verbroken', 'bad', 'i-wifi');
-        retry = setTimeout(open, 2000);
-      };
-    };
-    conn = { type: 'wifi', close() { closed = true; clearTimeout(retry); if (ws) ws.close(); } };
-    useConnection('wifi');
-    showWelcome(true, 'Verbinden met het GPS-kastje', 'Zorg dat de tablet verbonden is met het wifinetwerk ' +
-      'van het kastje (' + host + ').');
-    open();
+    const servedByBox = location.protocol === 'http:' && location.hostname &&
+      !['localhost', '127.0.0.1'].includes(location.hostname);
+    const known = [settings.host, servedByBox ? location.host : '', settings.boxHost, '192.168.4.1'];
+    const link = new T.box.BoxLink({
+      onText: text => parser.feed(text),
+      whereis: async () => {
+        if (!sync.configured()) return null;
+        const r = await sync.call({ action: 'whereis' });
+        return r.box && r.box.ip;
+      },
+      onState: (st, detail) => {
+        if (st === 'ok') {
+          setConn('Hotspot', 'ok', 'i-wifi');
+          if (detail && detail !== settings.boxHost) { settings.boxHost = detail; saveSettings(); }
+          if (!last) showWelcome(true, 'Wachten op GPS-signaal', 'Verbonden met het kastje op ' + detail + '.');
+        } else if (st === 'searching') {
+          setConn('Zoeken', 'off', 'i-wifi');
+          if (!last) showWelcome(true, 'GPS-kastje zoeken', detail + '. Chrome kan vragen of de app apparaten ' +
+            'in je netwerk mag gebruiken: kies Toestaan.');
+        } else if (st === 'notfound') {
+          setConn('Niet gevonden', 'bad', 'i-wifi');
+          if (!last) showWelcome(true, 'Kastje niet gevonden', 'Zet de hotspot van de tablet aan en het kastje ' +
+            'daarna. De app blijft zoeken.');
+        } else if (st === 'lost') {
+          setConn('Verbroken', 'bad', 'i-wifi');
+        } else if (st === 'connecting') {
+          setConn('Verbinden', 'off', 'i-wifi');
+        }
+      },
+    });
+    conn = { type: 'hotspot', close() { link.close(); } };
+    useConnection('hotspot');
+    showWelcome(true, 'GPS-kastje zoeken', 'Even geduld.');
+    link.start(known);
   }
 
   async function connectUsb() {
@@ -2142,7 +2334,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
 
   dlg.addEventListener('close', readSettings);
   $('connBle').onclick = () => { readSettings(); dlg.close(); connectBle(); };
-  $('connWifi').onclick = () => { readSettings(); dlg.close(); connectWifi(); };
+  $('connHotspot').onclick = () => { readSettings(); dlg.close(); connectHotspot(); };
   $('connUsb').onclick = () => { readSettings(); dlg.close(); connectUsb(); };
   $('connDemo').onclick = () => { readSettings(); dlg.close(); connectDemo(); };
   document.querySelectorAll('#themeSel button').forEach(b => {
@@ -2162,7 +2354,7 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
   $('driveSync').onclick = driveSyncNow;
 
   $('welBle').onclick = () => connectBle();
-  $('welWifi').onclick = connectWifi;
+  $('welHotspot').onclick = connectHotspot;
   $('welUsb').onclick = connectUsb;
   $('welDemo').onclick = connectDemo;
   $('welOther').onclick = () => { disconnect(); setConn('Offline', 'off', 'i-wifi'); showWelcome(true); };
@@ -2238,7 +2430,8 @@ input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
     // Verbinding: via het kastje geopend, of de vorige keuze opnieuw.
     const servedByBox = location.protocol === 'http:' && location.hostname && location.hostname !== 'localhost' &&
       location.hostname !== '127.0.0.1';
-    if (servedByBox || settings.connection === 'wifi') connectWifi();
+    if (settings.connection === 'wifi') settings.connection = 'hotspot';  // oude naam
+    if (servedByBox || settings.connection === 'hotspot') connectHotspot();
     else if (settings.connection === 'demo') connectDemo();
     else if (settings.connection === 'ble' && await reconnectBle()) { /* verbinden */ }
     else showWelcome(true);

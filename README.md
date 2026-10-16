@@ -2,7 +2,7 @@
 
 Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelijk:
 
-- **De tablet** draait de Trekker-GPS app en krijgt de positie via Bluetooth. De app tekent de kaart, neemt perceelgrenzen op, bewaart alle percelen en zet ze in je Google Drive.
+- **De Android-tablet** draait de Trekker-GPS app. Het kastje verbindt met de hotspot van de tablet. De app tekent de kaart, neemt perceelgrenzen op, bewaart alle percelen en zet ze in je Google Drive.
 - **De Amazone Amatron 3** krijgt GGA, VTG en GSA via RS232 aan 19200 baud, zoals de handleiding vraagt.
 
 ```
@@ -13,9 +13,9 @@ Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelij
                  └────────┬────────┘
                           │ 3,3V seriëel, 115200 baud
                  ┌────────┴────────┐
- tablet ◄──BLE───┤      ESP32      ├──wifi──► NTRIP (RTK-correcties, optioneel)
+ tablet ◄─hotspot┤      ESP32      ├──via hotspot──► NTRIP (RTK-correcties)
    │             │                 │
-   └─internet──► Google Drive
+   └─4G──► internet, Google Drive
                  └────────┬────────┘
                           │ 3,3V
                  ┌────────┴────────┐
@@ -117,10 +117,7 @@ De app staat online en werkt daarna ook zonder internet:
 **https://snoeckmichiel-ctrl.github.io/Claude-questions/**
 
 1. Open dit adres in Chrome op de tablet.
-2. Kies in het menu van Chrome "Toevoegen aan startscherm" of "App installeren". Dan opent ze als een gewone app, ook zonder internet.
-3. Zet het GPS-kastje aan en tik op **Bluetooth**. Kies "Trekker-GPS" in de lijst.
-
-Bluetooth werkt in Chrome op Android, Windows en Chromebook. Je hoeft het kastje niet te koppelen in de instellingen van de tablet. De tablet houdt zo zijn eigen internet, en dat is nodig voor Google Drive.
+2. Kies in het menu van Chrome "App installeren" of "Toevoegen aan startscherm". Dan opent ze als een gewone app, ook zonder internet.
 
 **Werken met de app:**
 
@@ -136,9 +133,48 @@ Bluetooth werkt in Chrome op Android, Windows en Chromebook. Je hoeft het kastje
 |---|---|
 | ![Welkomstscherm](docs/app-welkom.png) | ![Percelen](docs/app-percelen.png) |
 
+## Verbinden via de hotspot van de tablet
+
+Het kastje verbindt met de hotspot van de Android-tablet. De tablet houdt zijn mobiele internet voor Google Drive. Het kastje krijgt via de hotspot internet voor de RTK-correcties.
+
+### Eén keer instellen
+
+**Op de tablet,** bij Instellingen, Verbindingen, Mobiele hotspot:
+
+1. Kies een naam en een wachtwoord voor de hotspot.
+2. Zet de frequentieband op **2,4 GHz**. De ESP32 kan geen 5 GHz.
+3. Kies als beveiliging **WPA2**. Alleen WPA3 werkt niet met elk kastje.
+4. Zet "Automatisch uitschakelen" uit, als je tablet die optie heeft.
+
+**In de firmware,** in `config.h`:
+
+1. Vul bij `HOTSPOT_SSID` en `HOTSPOT_PASSWORD` dezelfde naam en hetzelfde wachtwoord in.
+2. Vul bij `DRIVE_URL` en `DRIVE_KEY` het adres en de sleutel van je Drive-koppeling in. Dat is optioneel, maar dan vindt de app het kastje meteen.
+3. Upload de firmware.
+
+### Elke dag
+
+1. Zet de mobiele data en de hotspot van de tablet aan.
+2. Zet de tractor en dus het kastje aan.
+3. Open de app en tik op **Hotspot**. De volgende keren verbindt de app vanzelf.
+
+De eerste keer vraagt Chrome of de app apparaten in je lokale netwerk mag gebruiken. Kies **Toestaan**.
+
+### Hoe de app het kastje vindt
+
+Android kiest bij elke start van de hotspot een ander adresbereik. Het kastje neemt daarin altijd het adres dat eindigt op **.200**. De app zoekt in deze volgorde:
+
+1. Het adres dat je zelf invulde bij Instellingen.
+2. Het laatst gekende adres.
+3. Het adres dat het kastje meldde aan je Drive-koppeling.
+4. Alle adressen van 192.168.0.200 tot 192.168.255.200. Dat duurt hooguit een halve minuut.
+
+Valt de verbinding weg, dan verbindt de app vanzelf opnieuw.
+
 ### Andere manieren om te verbinden
 
-- **Wifi via het kastje:** zet `WIFI_APP_ENABLED` op 1 in `config.h`. Verbind de tablet met het wifinetwerk "Trekker-GPS" en open `http://192.168.4.1`. Dit werkt ook op een iPad, maar zonder Google Drive, want de tablet heeft dan geen internet.
+- **Eigen wifinetwerk van het kastje:** verbind de tablet met het netwerk "Trekker-GPS" en open `http://192.168.4.1`. Dit werkt als de hotspot niet lukt, maar zonder internet en dus zonder Drive.
+- **Bluetooth:** zet `BLE_ENABLED` op 1 en tik in de app op Bluetooth.
 - **USB-kabel:** in Chrome of Edge op een Windows-tablet of computer.
 - **Andere apps zoals AgOpenGPS:** zet `TABLET_BT_ENABLED` op 1 of gebruik de USB-kabel.
 
@@ -221,7 +257,7 @@ Machinegegevens zoals hoeveelheden of de werkstand zitten er nog niet in. Daarvo
 
 Voor centimeternauwkeurigheid heb je een LC29H(DA/EA) of ZED-F9P nodig, plus correcties van een basisstation via internet. Dat heet NTRIP. Er zijn twee manieren:
 
-1. **Via wifi op de ESP32:** zet `NTRIP_ENABLED` op 1 en vul de gegevens van je gsm-hotspot en caster in `config.h` in. Dit is de manier met de Trekker-GPS app.
+1. **Via de hotspot van de tablet:** zet `NTRIP_ENABLED` op 1 en vul de gegevens van de caster in `config.h` in. Het kastje gebruikt het internet van de tablet. Dit is de manier met de Trekker-GPS app.
 2. **Via AgOpenGPS:** de NTRIP-client in AgIO stuurt de correcties over USB of Bluetooth terug. De ESP32 geeft ze door aan de GPS.
 
 Gebruik er maar één van tegelijk.
@@ -238,8 +274,8 @@ Mogelijke correctiediensten:
 2. Open `firmware/trekker_gps/trekker_gps.ino`.
 3. Pas `firmware/trekker_gps/config.h` aan.
 4. Kies het bord "ESP32 Dev Module" en de juiste poort.
-5. Kies bij Partition Scheme **Huge APP (3MB No OTA)**. Bluetooth en wifi samen passen niet in de standaardindeling.
-6. Alleen als `WIFI_APP_ENABLED` op 1 staat: installeer via Bibliotheken beheren **ESPAsyncWebServer** en **AsyncTCP**, allebei van ESP32Async.
+5. Kies bij Partition Scheme **Huge APP (3MB No OTA)**. Wifi, de webserver en de beveiligde verbinding met Drive passen niet in de standaardindeling.
+6. Installeer via Bibliotheken beheren **ESPAsyncWebServer** en **AsyncTCP**, allebei van ESP32Async.
 7. Klik op uploaden.
 
 Zonder tablet kan je testen met `DEBUG_OUTPUT` op 1. Open de seriële monitor aan 115200 baud. Elke 5 seconden verschijnt dan een regel met het aantal posities per seconde, de fix-kwaliteit en hoeveel zinnen naar de Amatron gingen. Zet de optie terug op 0 voor gebruik met de tablet.
@@ -248,7 +284,7 @@ De led op de ESP32 knippert bij elke positie en brandt continu bij een RTK-fix.
 
 ## Voor ontwikkelaars
 
-De app staat in `app/src`: `brand.js` voor naam en versie, `app.js` voor het scherm, `store.js` voor de opslag op de tablet, `sync.js` voor Google Drive en losse modules voor NMEA, geometrie, ISOXML en ZIP. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist` en `firmware/trekker_gps/web_app.h`:
+De app staat in `app/src`: `brand.js` voor naam en versie, `app.js` voor het scherm, `store.js` voor de opslag op de tablet, `sync.js` voor Google Drive, `box.js` om het kastje in de hotspot te vinden en losse modules voor NMEA, geometrie, ISOXML en ZIP. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist` en `firmware/trekker_gps/web_app.h`:
 
 ```
 python3 tools/build_web.py
@@ -262,7 +298,7 @@ node --test test/app.test.js test/drive_script.test.js
 NODE_PATH=$(npm root -g) node test/e2e_demo.cjs
 ```
 
-De laatste test rijdt met de demo-tractor door de app in een echte browser. Hij controleert de percelen, het bewaren na herladen, de ISOXML-export en de opslag in een nagebootste Drive. Daarvoor is Playwright nodig.
+De laatste test rijdt met de demo-tractor door de app in een echte browser. Hij controleert de percelen, het bewaren na herladen, de ISOXML-export, de opslag in een nagebootste Drive en de verbinding met een nagebootst kastje via de hotspot. Daarvoor is Playwright nodig.
 
 Bij elke push naar GitHub draaien de tests automatisch. Op de hoofdbranch wordt de app daarna gepubliceerd op GitHub Pages. Zet dat één keer aan via Settings, Pages, Source: **GitHub Actions**.
 
@@ -271,6 +307,7 @@ Bij elke push naar GitHub draaien de tests automatisch. Op de hoofdbranch wordt 
 - De pinnen van de seriële aansluiting op jouw Amatron 3-kabel.
 - Of je Amatron-versie `$GNGGA` aanvaardt of `$GPGGA` nodig heeft.
 - Of de Amatron 3 of je bedrijfssoftware de ISOXML-export van de app zonder fouten inleest.
-- De Bluetooth-verbinding tussen de ESP32 en de tablet.
+- De hotspot-verbinding met je eigen tablet, en of Chrome daar om toestemming voor het lokale netwerk vraagt.
+- Of het kastje zijn adres aan Drive kan melden.
 - De Drive-koppeling met een echt Google-account.
 - De LC29H-instelcommando's (`PAIR050` en `PAIR062`). Ze volgen de Quectel-documentatie, maar zijn nog niet op een echte module getest.

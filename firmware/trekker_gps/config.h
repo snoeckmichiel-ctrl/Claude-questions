@@ -37,9 +37,8 @@
 #define TABLET_USB_ENABLED 1
 #define TABLET_USB_BAUD    115200 // zelfde waarde instellen in de tablet-app
 
-// Bluetooth werkt alleen op een gewone ESP32 (ESP32-WROOM-32 / DevKitC),
-// niet op ESP32-S3, -C3 of -C6. Standaard uit: wifi en Bluetooth samen
-// vragen veel geheugen. Zet aan als je een andere tablet-app via Bluetooth gebruikt.
+// Klassieke Bluetooth voor andere apps zoals AgOpenGPS. Alleen op een gewone
+// ESP32 (ESP32-WROOM-32 / DevKitC). Standaard uit om geheugen te sparen.
 #define TABLET_BT_ENABLED  0
 #define TABLET_BT_NAME     "Trekker-GPS"
 
@@ -48,30 +47,41 @@
 #define TABLET_FORWARD_RTCM 1
 
 // ---------------------------------------------------------------------------
-// Bluetooth Low Energy voor de online Trekker-GPS app (aanbevolen).
-// De tablet houdt zo zijn eigen internet voor Google Drive.
-// Werkt met Chrome op Android, Windows en Chromebook. Geen koppeling nodig in
-// de instellingen van de tablet: de app vraagt het kastje zelf.
-// ---------------------------------------------------------------------------
-#define BLE_ENABLED      1
-#define BLE_NAME         "Trekker-GPS"
-
-// ---------------------------------------------------------------------------
-// Reserve: de app via het eigen wifinetwerk van het kastje (http://192.168.4.1).
-// Handig zonder internet of op een iPad, maar dan geen Google Drive.
+// Hotspot van de Android-tablet (aanbevolen)
+// Het kastje verbindt met de hotspot van de tablet. De tablet houdt zo zijn
+// mobiele internet voor Google Drive, en het kastje krijgt internet voor NTRIP.
 // Vraagt de bibliotheken "ESPAsyncWebServer" en "AsyncTCP" van ESP32Async.
 // ---------------------------------------------------------------------------
-#define WIFI_APP_ENABLED 0
-#define WIFI_AP_SSID     "Trekker-GPS"
-#define WIFI_AP_PASSWORD "trekker123"  // minstens 8 tekens, verander dit
+#define HOTSPOT_ENABLED    1
+#define HOTSPOT_SSID       "Naam van de hotspot"   // zoals op de tablet ingesteld
+#define HOTSPOT_PASSWORD   "wachtwoord"
+// Android kiest bij elke start van de hotspot een ander adresbereik. Het kastje
+// neemt daarin altijd het adres dat op .200 eindigt, zodat de app het vindt.
+#define HOTSPOT_HOST_OCTET 200
+
+// Adres van het kastje melden aan je Drive-koppeling (drive/Code.gs), zodat de
+// app het kastje meteen vindt. Optioneel: leeg laten mag.
+#define DRIVE_URL          ""   // web-app-URL, eindigt op /exec
+#define DRIVE_KEY          ""   // dezelfde sleutel als in Code.gs
 
 // ---------------------------------------------------------------------------
-// Ingebouwde NTRIP-client via wifi (bv. hotspot van je gsm).
-// Gebruik dit OF de NTRIP-client van de tablet, niet allebei tegelijk.
+// Eigen wifinetwerk van het kastje, als reserve (http://192.168.4.1)
+// Handig als de hotspot niet werkt. Zonder internet, dus zonder Drive.
+// ---------------------------------------------------------------------------
+#define BOX_AP_ENABLED     1
+#define BOX_AP_SSID        "Trekker-GPS"
+#define BOX_AP_PASSWORD    "trekker123"  // minstens 8 tekens, verander dit
+
+// ---------------------------------------------------------------------------
+// Bluetooth Low Energy, als alternatief voor de hotspot.
+// ---------------------------------------------------------------------------
+#define BLE_ENABLED        0
+#define BLE_NAME           "Trekker-GPS"
+
+// ---------------------------------------------------------------------------
+// RTK-correcties via NTRIP. Gebruikt het internet van de tablet-hotspot.
 // ---------------------------------------------------------------------------
 #define NTRIP_ENABLED    0
-#define WIFI_SSID        "mijn-hotspot"
-#define WIFI_PASSWORD    "wachtwoord"
 #define NTRIP_HOST       "caster.centipede.fr"  // FLEPOS of een andere caster mag ook
 #define NTRIP_PORT       2101
 #define NTRIP_MOUNT      "MOUNTPOINT"           // dichtstbijzijnde basisstation

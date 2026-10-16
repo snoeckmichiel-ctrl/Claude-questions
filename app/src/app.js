@@ -11,7 +11,7 @@
 
   // ---------------------------------------------------------------- toestand
   const settings = {
-    defaultWidth: 12, host: '', connection: '', theme: 'auto',
+    defaultWidth: 12, host: '', boxHost: '', connection: '', theme: 'auto',
     driveUrl: '', driveKey: '', bleId: '', lastCustomer: '', lastFarm: '',
   };
   const store = new T.store.Store(geo);
@@ -237,31 +237,43 @@
     return false;
   }
 
-  function connectWifi() {
-    if (location.protocol === 'https:') {
-      toast('Wifi werkt alleen als je de app opent via het kastje zelf: http://192.168.4.1');
-      return;
-    }
+  // Via de hotspot van de tablet (of het eigen wifinetwerk van het kastje).
+  function connectHotspot() {
     disconnect();
-    const host = settings.host || location.host || '192.168.4.1';
-    let ws = null, closed = false, retry = null;
-    const open = () => {
-      setConn('Verbinden', 'off', 'i-wifi');
-      try { ws = new WebSocket('ws://' + host + '/ws'); } catch (e) { ws = null; }
-      if (!ws) { retry = setTimeout(open, 3000); return; }
-      ws.onopen = () => setConn('Wifi', 'ok', 'i-wifi');
-      ws.onmessage = ev => { if (typeof ev.data === 'string') parser.feed(ev.data); };
-      ws.onclose = () => {
-        if (closed) return;
-        setConn('Verbroken', 'bad', 'i-wifi');
-        retry = setTimeout(open, 2000);
-      };
-    };
-    conn = { type: 'wifi', close() { closed = true; clearTimeout(retry); if (ws) ws.close(); } };
-    useConnection('wifi');
-    showWelcome(true, 'Verbinden met het GPS-kastje', 'Zorg dat de tablet verbonden is met het wifinetwerk ' +
-      'van het kastje (' + host + ').');
-    open();
+    const servedByBox = location.protocol === 'http:' && location.hostname &&
+      !['localhost', '127.0.0.1'].includes(location.hostname);
+    const known = [settings.host, servedByBox ? location.host : '', settings.boxHost, '192.168.4.1'];
+    const link = new T.box.BoxLink({
+      onText: text => parser.feed(text),
+      whereis: async () => {
+        if (!sync.configured()) return null;
+        const r = await sync.call({ action: 'whereis' });
+        return r.box && r.box.ip;
+      },
+      onState: (st, detail) => {
+        if (st === 'ok') {
+          setConn('Hotspot', 'ok', 'i-wifi');
+          if (detail && detail !== settings.boxHost) { settings.boxHost = detail; saveSettings(); }
+          if (!last) showWelcome(true, 'Wachten op GPS-signaal', 'Verbonden met het kastje op ' + detail + '.');
+        } else if (st === 'searching') {
+          setConn('Zoeken', 'off', 'i-wifi');
+          if (!last) showWelcome(true, 'GPS-kastje zoeken', detail + '. Chrome kan vragen of de app apparaten ' +
+            'in je netwerk mag gebruiken: kies Toestaan.');
+        } else if (st === 'notfound') {
+          setConn('Niet gevonden', 'bad', 'i-wifi');
+          if (!last) showWelcome(true, 'Kastje niet gevonden', 'Zet de hotspot van de tablet aan en het kastje ' +
+            'daarna. De app blijft zoeken.');
+        } else if (st === 'lost') {
+          setConn('Verbroken', 'bad', 'i-wifi');
+        } else if (st === 'connecting') {
+          setConn('Verbinden', 'off', 'i-wifi');
+        }
+      },
+    });
+    conn = { type: 'hotspot', close() { link.close(); } };
+    useConnection('hotspot');
+    showWelcome(true, 'GPS-kastje zoeken', 'Even geduld.');
+    link.start(known);
   }
 
   async function connectUsb() {
@@ -902,7 +914,7 @@
 
   dlg.addEventListener('close', readSettings);
   $('connBle').onclick = () => { readSettings(); dlg.close(); connectBle(); };
-  $('connWifi').onclick = () => { readSettings(); dlg.close(); connectWifi(); };
+  $('connHotspot').onclick = () => { readSettings(); dlg.close(); connectHotspot(); };
   $('connUsb').onclick = () => { readSettings(); dlg.close(); connectUsb(); };
   $('connDemo').onclick = () => { readSettings(); dlg.close(); connectDemo(); };
   document.querySelectorAll('#themeSel button').forEach(b => {
@@ -922,7 +934,7 @@
   $('driveSync').onclick = driveSyncNow;
 
   $('welBle').onclick = () => connectBle();
-  $('welWifi').onclick = connectWifi;
+  $('welHotspot').onclick = connectHotspot;
   $('welUsb').onclick = connectUsb;
   $('welDemo').onclick = connectDemo;
   $('welOther').onclick = () => { disconnect(); setConn('Offline', 'off', 'i-wifi'); showWelcome(true); };
@@ -998,7 +1010,8 @@
     // Verbinding: via het kastje geopend, of de vorige keuze opnieuw.
     const servedByBox = location.protocol === 'http:' && location.hostname && location.hostname !== 'localhost' &&
       location.hostname !== '127.0.0.1';
-    if (servedByBox || settings.connection === 'wifi') connectWifi();
+    if (settings.connection === 'wifi') settings.connection = 'hotspot';  // oude naam
+    if (servedByBox || settings.connection === 'hotspot') connectHotspot();
     else if (settings.connection === 'demo') connectDemo();
     else if (settings.connection === 'ble' && await reconnectBle()) { /* verbinden */ }
     else showWelcome(true);

@@ -1,15 +1,24 @@
 // trekker_gps.ino
 //
 // Leest NMEA van een Quectel LC29H en verdeelt het over:
-//   - de tablet: Trekker-GPS app via Bluetooth LE of wifi, of andere apps via USB of Bluetooth (alle zinnen),
+//   - de Trekker-GPS app op de tablet, via de hotspot van de tablet (of het eigen
+//     wifinetwerk van het kastje, of Bluetooth LE),
+//   - andere apps via USB of klassieke Bluetooth (alle zinnen),
 //   - de Amazone Amatron 3 via RS232 (GGA, VTG, GSA aan 19200 baud).
-// RTCM-correcties komen van de tablet of van de ingebouwde NTRIP-client.
+// RTCM-correcties komen van de ingebouwde NTRIP-client of van een app via USB/Bluetooth.
 //
-// Bord: gewone ESP32 (ESP32 Dev Module) in de Arduino IDE.
+// Bord: gewone ESP32 (ESP32 Dev Module), Partition Scheme "Huge APP".
 
 #include <Arduino.h>
 #include "config.h"
 #include "nmea.h"
+
+#define FW_VERSION "0.3.0"
+#define WIFI_SERVER (HOTSPOT_ENABLED || BOX_AP_ENABLED)
+
+#if NTRIP_ENABLED && !HOTSPOT_ENABLED
+#error "NTRIP heeft internet nodig: zet HOTSPOT_ENABLED op 1"
+#endif
 
 #if TABLET_BT_ENABLED
 #include <BluetoothSerial.h>
@@ -31,20 +40,26 @@ static char bleBuf[1024];
 static size_t bleLen = 0;
 #endif
 
-#if NTRIP_ENABLED || WIFI_APP_ENABLED
+#if WIFI_SERVER
 #include <WiFi.h>
-#endif
-#if NTRIP_ENABLED
-#include <base64.h>
-#endif
-#if WIFI_APP_ENABLED
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include "web_app.h"
 static AsyncWebServer webServer(80);
-static AsyncWebSocket webSocket("/ws");
-static char wsBuf[2048];
-static size_t wsLen = 0;
+static AsyncEventSource events("/events");  // NMEA-stroom voor de app
+static char evBuf[2048];
+static size_t evLen = 0;
+#endif
+
+#if HOTSPOT_ENABLED
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+static volatile bool announceRequested = false;
+static volatile bool staDisconnected = false;
+#endif
+
+#if NTRIP_ENABLED
+#include <base64.h>
 #endif
 
 HardwareSerial& GNSS = Serial2;
@@ -99,39 +114,8 @@ static void configureGnss() {
 }
 
 // ---------------------------------------------------------------------------
-// Uitvoer
+// Bluetooth LE
 // ---------------------------------------------------------------------------
-#if WIFI_APP_ENABLED
-// Zinnen bundelen en ongeveer 10 keer per seconde naar de app sturen.
-static void wsFlush() {
-  if (wsLen && webSocket.count() > 0) webSocket.textAll(wsBuf, wsLen);
-  wsLen = 0;
-}
-
-static void wsQueue(const char* line, size_t len) {
-  if (wsLen + len + 2 > sizeof wsBuf) wsFlush();
-  if (len + 2 > sizeof wsBuf) return;
-  memcpy(wsBuf + wsLen, line, len);
-  wsBuf[wsLen + len] = '\r';
-  wsBuf[wsLen + len + 1] = '\n';
-  wsLen += len + 2;
-}
-
-static void setupWebApp() {
-  WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
-  webServer.addHandler(&webSocket);
-  webServer.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
-    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", WEB_APP_GZ, WEB_APP_GZ_LEN);
-    res->addHeader("Content-Encoding", "gzip");
-    res->addHeader("Cache-Control", "no-cache");
-    req->send(res);
-  });
-  webServer.onNotFound([](AsyncWebServerRequest* req) { req->redirect("/"); });
-  webServer.begin();
-  DBG("app op http://%s", WiFi.softAPIP().toString().c_str());
-}
-#endif
-
 #if BLE_ENABLED
 class BleCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*, esp_ble_gatts_cb_param_t* param) override {
@@ -185,12 +169,159 @@ static void bleQueue(const char* line, size_t len) {
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// Wifi: hotspot van de tablet en/of eigen netwerk, met webserver voor de app
+// ---------------------------------------------------------------------------
+#if WIFI_SERVER
+// Zinnen bundelen en ongeveer 10 keer per seconde naar de app sturen.
+static void evFlush() {
+  if (evLen && events.count() > 0) {
+    evBuf[evLen] = '\0';
+    events.send(evBuf, "nmea", millis());
+  }
+  evLen = 0;
+}
+
+static void evQueue(const char* line, size_t len) {
+  if (evLen + len + 3 > sizeof evBuf) evFlush();
+  if (len + 3 > sizeof evBuf) return;
+  memcpy(evBuf + evLen, line, len);
+  evBuf[evLen + len] = '\n';
+  evLen += len + 1;
+}
+
+static String infoJson() {
+  String s = "{\"name\":\"Trekker-GPS\",\"version\":\"" FW_VERSION "\"";
+#if HOTSPOT_ENABLED
+  s += ",\"ip\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) + "\"";
+#endif
+#if BOX_AP_ENABLED
+  s += ",\"ap\":\"" + WiFi.softAPIP().toString() + "\"";
+#endif
+  s += ",\"fix\":" + String(fixQuality) + ",\"clients\":" + String((unsigned)events.count()) + "}";
+  return s;
+}
+
+static void setupWifi() {
+#if HOTSPOT_ENABLED && BOX_AP_ENABLED
+  WiFi.mode(WIFI_AP_STA);
+#elif HOTSPOT_ENABLED
+  WiFi.mode(WIFI_STA);
+#else
+  WiFi.mode(WIFI_AP);
+#endif
+#if BOX_AP_ENABLED
+  WiFi.softAP(BOX_AP_SSID, BOX_AP_PASSWORD);
+#endif
+#if HOTSPOT_ENABLED
+  WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t) { staDisconnected = true; },
+               ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASSWORD);
+#endif
+
+  // De online app (https) mag het kastje lezen: CORS en lokale netwerktoegang toestaan.
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Private-Network", "true");
+
+  webServer.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
+    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", WEB_APP_GZ, WEB_APP_GZ_LEN);
+    res->addHeader("Content-Encoding", "gzip");
+    res->addHeader("Cache-Control", "no-cache");
+    req->send(res);
+  });
+  webServer.on("/api/info", HTTP_GET, [](AsyncWebServerRequest* req) {
+    req->send(200, "application/json", infoJson());
+  });
+  webServer.addHandler(&events);
+  webServer.onNotFound([](AsyncWebServerRequest* req) {
+    if (req->method() == HTTP_OPTIONS) req->send(204);
+    else req->redirect("/");
+  });
+  webServer.begin();
+}
+
+#if HOTSPOT_ENABLED
+// Na verbinden: vast adres x.x.x.200 nemen in het adresbereik van de hotspot.
+// Na verbreken: terug naar DHCP, want de volgende hotspot kan een ander bereik hebben.
+static void hotspotLoop() {
+  static bool wasConnected = false;
+  static bool staticSet = false;
+  if (staDisconnected) {
+    staDisconnected = false;
+    if (staticSet) {
+      WiFi.config(IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
+      staticSet = false;
+      DBG("hotspot verbroken, terug naar DHCP");
+    }
+  }
+  bool connected = WiFi.status() == WL_CONNECTED;
+  if (connected && !wasConnected) {
+    IPAddress ip = WiFi.localIP(), gw = WiFi.gatewayIP(), mask = WiFi.subnetMask();
+    if (!staticSet && mask == IPAddress(255, 255, 255, 0)) {
+      uint8_t host = HOTSPOT_HOST_OCTET;
+      if (gw[3] == host) host++;
+      IPAddress want(ip[0], ip[1], ip[2], host);
+      if (ip != want) WiFi.config(want, gw, mask, gw);
+      staticSet = true;
+    }
+    DBG("hotspot verbonden, adres %s", WiFi.localIP().toString().c_str());
+    announceRequested = true;
+  }
+  wasConnected = connected;
+
+  static unsigned long lastAnnounce = 0;
+  if (connected && millis() - lastAnnounce > 10UL * 60UL * 1000UL) {
+    lastAnnounce = millis();
+    announceRequested = true;
+  }
+}
+
+static String urlEncode(const char* s) {
+  String out;
+  for (; *s; ++s) {
+    char c = *s;
+    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') out += c;
+    else { char b[4]; snprintf(b, sizeof b, "%%%02X", (unsigned char)c); out += b; }
+  }
+  return out;
+}
+
+// Meldt het adres aan de Drive-koppeling, in een aparte taak zodat de GPS-stroom doorloopt.
+static void announceTask(void*) {
+  for (;;) {
+    if (announceRequested && WiFi.status() == WL_CONNECTED && strlen(DRIVE_URL) > 0) {
+      announceRequested = false;
+      vTaskDelay(pdMS_TO_TICKS(1500));  // vast adres eerst laten ingaan
+      WiFiClientSecure client;
+      client.setInsecure();  // alleen het lokale adres wordt gemeld
+      HTTPClient http;
+      String url = String(DRIVE_URL) + "?action=announce&key=" + urlEncode(DRIVE_KEY) +
+                   "&ip=" + WiFi.localIP().toString() + "&version=" FW_VERSION;
+      // Het script draait al bij het eerste verzoek; de omleiding niet volgen.
+      http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+      if (http.begin(client, url)) {
+        int code = http.GET();
+        DBG("adres gemeld aan Drive: %d", code);
+        (void)code;
+        http.end();
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+#endif
+#endif
+
+// ---------------------------------------------------------------------------
+// Uitvoer
+// ---------------------------------------------------------------------------
 static void sendToTablet(const char* line, size_t len) {
+#if WIFI_SERVER
+  evQueue(line, len);
+#endif
 #if BLE_ENABLED
   bleQueue(line, len);
-#endif
-#if WIFI_APP_ENABLED
-  wsQueue(line, len);
 #endif
 #if TABLET_USB_ENABLED
   Serial.write((const uint8_t*)line, len);
@@ -244,7 +375,7 @@ static void handleLine(const char* line, size_t len) {
 }
 
 // ---------------------------------------------------------------------------
-// Correcties van de tablet naar de GPS-module
+// Correcties van een app (USB of klassieke Bluetooth) naar de GPS-module
 // ---------------------------------------------------------------------------
 static void forwardFromTablet() {
   uint8_t buf[256];
@@ -288,14 +419,13 @@ static void ntripLoop() {
     if (ntripState != WIFI_WAIT) {
       caster.stop();
       ntripState = WIFI_WAIT;
-      DBG("wifi verbroken");
+      DBG("geen internet voor NTRIP");
     }
     return;
   }
 
   switch (ntripState) {
     case WIFI_WAIT:
-      DBG("wifi verbonden, IP %s", WiFi.localIP().toString().c_str());
       ntripState = CASTER_CONNECT;
       break;
 
@@ -303,7 +433,7 @@ static void ntripLoop() {
       if (!caster.connect(NTRIP_HOST, NTRIP_PORT, 2000)) { ntripFail("caster onbereikbaar"); break; }
       String auth = base64::encode(String(NTRIP_USER) + ":" + NTRIP_PASSWORD);
       caster.print(String("GET /") + NTRIP_MOUNT + " HTTP/1.0\r\n"
-                   "User-Agent: NTRIP TrekkerGPS/1.0\r\n"
+                   "User-Agent: NTRIP TrekkerGPS/" FW_VERSION "\r\n"
                    "Authorization: Basic " + auth + "\r\n\r\n");
       headerLen = 0;
       ntripTimer = now;
@@ -387,24 +517,16 @@ void setup() {
   setupBle();
 #endif
 
-#if WIFI_APP_ENABLED && NTRIP_ENABLED
-  WiFi.mode(WIFI_AP_STA);  // eigen netwerk voor de tablet + internet via gsm-hotspot
-#elif WIFI_APP_ENABLED
-  WiFi.mode(WIFI_AP);
-#elif NTRIP_ENABLED
-  WiFi.mode(WIFI_STA);
+#if WIFI_SERVER
+  setupWifi();
 #endif
-#if WIFI_APP_ENABLED
-  setupWebApp();
-#endif
-#if NTRIP_ENABLED
-  WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+#if HOTSPOT_ENABLED
+  xTaskCreatePinnedToCore(announceTask, "drive", 8192, nullptr, 1, nullptr, 0);
 #endif
 
   delay(500);  // module laten opstarten
   configureGnss();
-  DBG("Trekker-GPS gestart");
+  DBG("Trekker-GPS " FW_VERSION " gestart");
 }
 
 void loop() {
@@ -413,6 +535,10 @@ void loop() {
   }
 
   forwardFromTablet();
+
+#if HOTSPOT_ENABLED
+  hotspotLoop();
+#endif
 
 #if NTRIP_ENABLED
   ntripLoop();
@@ -430,10 +556,9 @@ void loop() {
   if (millis() - lastBleFlush >= 100) { lastBleFlush = millis(); bleFlush(); }
 #endif
 
-#if WIFI_APP_ENABLED
-  static unsigned long lastWsFlush = 0, lastWsCleanup = 0;
-  if (millis() - lastWsFlush >= 100) { lastWsFlush = millis(); wsFlush(); }
-  if (millis() - lastWsCleanup >= 1000) { lastWsCleanup = millis(); webSocket.cleanupClients(); }
+#if WIFI_SERVER
+  static unsigned long lastEvFlush = 0;
+  if (millis() - lastEvFlush >= 100) { lastEvFlush = millis(); evFlush(); }
 #endif
 
 #if DEBUG_OUTPUT
