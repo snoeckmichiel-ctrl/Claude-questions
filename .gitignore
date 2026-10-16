@@ -1,0 +1,5 @@
+build/
+test_nmea
+*.bin
+*.elf
+.vscode/
