@@ -33,23 +33,50 @@ De Amatron 3 wil **minstens 5 posities per seconde**. Niet elke LC29H-variant ka
 |---|---|---|---|
 | LC29H(BS) | basisstation | n.v.t. | **Nee.** Dient om zelf een RTK-basisstation te bouwen. |
 | LC29H(DA) | cm met RTK | RTK maar 1 Hz | **Liever niet.** Te traag voor de Amatron in RTK. |
-| LC29H(AA) | ongeveer 1 m met SBAS/EGNOS | tot 10 Hz | **Ja**, goedkoopste optie. |
-| LC29H(EA) | cm met RTK | RTK tot 10 Hz | **Beste LC29H-keuze**, als je hem vindt. |
+| LC29H(AA) | ongeveer 1 m met SBAS/EGNOS | tot 10 Hz | **Ja**, aanbevolen om te starten. |
+| LC29H(EA) | cm met RTK | RTK tot 10 Hz | **Goed**, maar niet als Waveshare HAT te vinden. |
 | u-blox ZED-F9P | cm met RTK | 10 Hz+ | **Ja**, de standaard bij AgOpenGPS, maar duurder. |
 
 De firmware werkt met elke ontvanger die NMEA uitstuurt. Alleen het automatische instellen bij het opstarten is specifiek voor de LC29H. Zet `GNSS_SEND_CONFIG` op 0 bij een andere ontvanger.
 
 ## Onderdelen
 
-| Onderdeel | Opmerking |
+Prijzen zijn richtprijzen en verschillen per winkel.
+
+### Het GPS-kastje
+
+| Onderdeel | Waarop letten | Ongeveer |
+|---|---|---|
+| Waveshare LC29H(**AA**) GPS HAT | Niet de BS-variant. Bekijk of de antenne en de IPEX-naar-SMA-kabel erbij zitten. | € 45 |
+| Dual-band L1+L5 actieve antenne | Magneetvoet, SMA-stekker, kabel van 3 tot 5 m tot in de cabine | € 20 tot 40 |
+| ESP32 DevKitC | Met ESP32-WROOM-32. Geen S3, C3 of C6. | € 8 tot 12 |
+| MAX3232-module met Sub-D 9 | RS232-omzetter die op 3,3V werkt | € 3 tot 5 |
+| DC-DC omvormer 12V naar 5V, 3A | Ingang tot minstens 24V, geschikt voor auto | € 8 tot 12 |
+| Zekeringhouder met zekering van 2A | In de plus, vlak bij de aansluiting | € 3 |
+| Stekker voor de tractor | Sigarettenaanstekerstekker of 3-polige stekker volgens DIN 9680 | € 5 tot 10 |
+| Seriële kabel naar de Amatron 3 | Kijk eerst welke aansluiting er vrij is aan de kabel van de Amatron | € 5 tot 30 |
+| Dupont-draadjes vrouw-vrouw | Om de HAT op de ESP32 aan te sluiten | € 3 |
+| Behuizing IP65 met kabelwartels | Stof en trillingen in de cabine | € 10 tot 15 |
+
+### Op de tractor
+
+| Onderdeel | Waarop letten | Ongeveer |
+|---|---|---|
+| Android-tablet | Met simkaart voor mobiele data, Chrome en een hotspot op 2,4 GHz | heb je al |
+| Tablethouder voor de cabine | Stevig, met zuignap of klem | € 20 tot 30 |
+| 12V-lader voor de tablet | USB-C of de aansluiting van je tablet | € 10 |
+
+### Software en diensten
+
+| Wat | Kost |
 |---|---|
-| GPS-module LC29H(AA) of (EA) | bv. de Waveshare LC29H GPS/RTK HAT |
-| Dual-band L1/L5 actieve antenne | met magneetvoet, midden op het cabinedak |
-| ESP32 DevKit (ESP32-WROOM-32) | gewone ESP32, **geen** S3/C3, anders werkt Bluetooth niet |
-| MAX3232-module met Sub-D 9 | RS232-omzetter, werkt op 3,3V |
-| DC-DC omvormer 12V naar 5V, 2A | voor auto/tractor, met zekering ervoor |
-| Kabel naar de Amatron 3 | seriële aansluiting van de Amatron, Sub-D 9 |
-| Behuizing, kabelwartels | stof en trillingen in de cabine |
+| Arduino IDE en de bibliotheken | gratis |
+| Google-account voor Drive | gratis |
+| RTK-correcties via Centipede, later | gratis |
+
+### Later, voor centimeternauwkeurigheid
+
+De AA-variant haalt ongeveer een meter met EGNOS. Voor RTK met centimeters heb je een andere ontvanger nodig die vijf keer per seconde RTK kan, zoals een u-blox ZED-F9P. Die kost ongeveer € 200 tot 300. De rest van het kastje blijft hetzelfde.
 
 ## Aansluiten
 
