@@ -40,6 +40,7 @@ def main() -> None:
             shutil.copyfile(f, dist_dir / f.name)
 
     data = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
+    data = bytes(data[:9]) + b"\xff" + bytes(data[10:])  # OS-byte vast, zelfde uitkomst op elke computer
     rows = []
     for i in range(0, len(data), 20):
         rows.append("  " + ", ".join(f"0x{b:02x}" for b in data[i:i + 20]) + ",")
