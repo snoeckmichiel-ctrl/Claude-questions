@@ -114,6 +114,25 @@ De ESP32 stuurt alle NMEA-zinnen naar de tablet. De tablet-app maakt de bestande
 - **Windows-tablet met AgOpenGPS:** sluit aan met een USB-kabel. Kies in AgIO de juiste COM-poort aan 115200 baud. Bluetooth kan ook, dan verschijnt er een COM-poort voor "Trekker-GPS" na het koppelen.
 - **Android-tablet:** koppel "Trekker-GPS" via Bluetooth. Gebruik een app die een externe Bluetooth-GPS als locatie doorgeeft aan andere apps, zoals "Bluetooth GNSS".
 
+## ISOXML-bestanden
+
+ISOXML-taakbestanden heten `TASKDATA.XML` en volgen de norm ISO 11783-10. Het GPS-kastje maakt zelf geen bestanden. Het levert alleen de positie. Er zijn twee plaatsen waar de ISOXML-bestanden gemaakt kunnen worden.
+
+### Op de Amatron 3, de eenvoudigste weg
+
+De Amatron 3 heeft standaard een Task Controller voor taakbeheer in ISO-XML. Zodra hij GPS krijgt van dit kastje, kan hij taken registreren en taakkaarten afwerken.
+
+1. Maak een taak, perceel of taakkaart in je bedrijfssoftware en zet de map `TASKDATA` op een USB-stick.
+2. Importeer de taak op de Amatron 3 en start ze.
+3. Rijd op het perceel. De Amatron registreert de bewerkte oppervlakte en hoeveelheden met de GPS-positie.
+4. Exporteer de taak terug naar de USB-stick en lees ze in je bedrijfssoftware in.
+
+Optionele licenties breiden dit uit. GPS-Switch zorgt voor automatische sectieschakeling. GPS-Maps leest taakkaarten in shapefile-formaat.
+
+### Op de tablet
+
+Dat hangt af van de app. Niet elke tablet-app kan ISOXML schrijven. AgOpenGPS werkt vooral met eigen bestanden en KML.
+
 ## RTK-correcties
 
 Voor centimeternauwkeurigheid heb je een LC29H(DA/EA) of ZED-F9P nodig, plus correcties van een basisstation via internet. Dat heet NTRIP. Er zijn twee manieren:
