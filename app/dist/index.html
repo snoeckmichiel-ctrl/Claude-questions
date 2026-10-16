@@ -2,143 +2,383 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#1f6f43">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Trekker-GPS</title>
 <style>
 :root {
-  --bg: #f4f5f2; --panel: #ffffff; --text: #1b1f1c; --muted: #5c655f; --line: #d6dbd5;
-  --map: #e9ede6; --grid: #d3d9cf; --accent: #1f6f43; --accent-text: #ffffff;
-  --work: #d9480f; --boundary: #2b8a3e; --cover: rgba(240, 140, 0, 0.42);
-  --ok: #2b8a3e; --warn: #e8a400; --bad: #c92a2a;
+  --bg: #eef1ed; --surface: #ffffff; --surface-2: #f5f7f4; --text: #18201b; --muted: #5f6b63;
+  --line: #dde3dc; --map: #e7ece4; --grid: rgba(24, 32, 27, 0.07);
+  --brand: #14532d; --brand-2: #1f7a43; --on-brand: #ffffff;
+  --work: #e8590c; --on-work: #ffffff; --boundary: #1f7a43; --cover: rgba(232, 120, 20, 0.40);
+  --field-fill: rgba(31, 122, 67, 0.07);
+  --good: #1f9d55; --fair: #e0a100; --poor: #e8590c; --none: #d63939;
+  --shadow: 0 1px 2px rgba(16, 24, 20, 0.06), 0 8px 24px rgba(16, 24, 20, 0.10);
+  --radius: 14px;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
-    --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
-    --cover: rgba(255, 160, 40, 0.38);
+    --bg: #0e1210; --surface: #171c19; --surface-2: #1e2420; --text: #e9eee9; --muted: #96a29a;
+    --line: #2a322d; --map: #121714; --grid: rgba(233, 238, 233, 0.06);
+    --brand: #2f9e5a; --brand-2: #3cb36a; --on-brand: #06140b;
+    --cover: rgba(255, 150, 40, 0.34); --field-fill: rgba(60, 179, 106, 0.08); --boundary: #3cb36a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
-  --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
-  --cover: rgba(255, 160, 40, 0.38);
+  --bg: #0e1210; --surface: #171c19; --surface-2: #1e2420; --text: #e9eee9; --muted: #96a29a;
+  --line: #2a322d; --map: #121714; --grid: rgba(233, 238, 233, 0.06);
+  --brand: #2f9e5a; --brand-2: #3cb36a; --on-brand: #06140b;
+  --cover: rgba(255, 150, 40, 0.34); --field-fill: rgba(60, 179, 106, 0.08); --boundary: #3cb36a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-  font: 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
-  -webkit-user-select: none; user-select: none; }
-#app { display: grid; height: 100%; grid-template-rows: auto 1fr; grid-template-columns: 1fr 260px;
-  grid-template-areas: "status status" "map panel"; }
-@media (orientation: portrait), (max-width: 700px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto;
-    grid-template-areas: "status" "map" "panel"; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+  font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+button:focus { outline: none; }
+button:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.ic { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; }
+.ic.fill { fill: currentColor; stroke: none; }
+
+/* ------------------------------------------------ bovenbalk */
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+#topbar { display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top)); background: var(--surface);
+  border-bottom: 1px solid var(--line); z-index: 3; min-height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--brand); color: var(--on-brand);
+  display: grid; place-items: center; }
+.brand-mark .ic { width: 20px; height: 20px; }
+#fieldBtn { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-weight: 600;
+  max-width: 34vw; overflow: hidden; }
+#fieldBtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#fieldBtn .ic { width: 18px; height: 18px; color: var(--muted); }
+.chips { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 12px;
+  border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600;
+  font-size: 0.92rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip .ic { width: 18px; height: 18px; color: var(--muted); }
+#fix::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--none); }
+#fix[data-q="good"]::before { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+#fix[data-q="fair"]::before { background: var(--fair); }
+#fix[data-q="poor"]::before { background: var(--poor); }
+#conn[data-state="ok"] .ic { color: var(--good); }
+#conn[data-state="bad"] .ic { color: var(--none); }
+@media (max-width: 760px) {
+  .brand-name { display: none; }
+  #sats { display: none; }
+  #fieldBtn { max-width: 40vw; }
 }
-#status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px;
-  background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
-.pill { padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
-  font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pill b { font-weight: 600; }
-.pill.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
-.pill.warn { background: var(--warn); color: #1b1f1c; border-color: var(--warn); }
-.pill.bad { background: var(--bad); color: #fff; border-color: var(--bad); }
-#speed { margin-left: auto; font-size: 1.25rem; }
-#mapWrap { grid-area: map; position: relative; min-height: 0; }
-#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
-#mapButtons { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
-#mapButtons button { width: 52px; height: 52px; font-size: 1.5rem; padding: 0; }
-#panel { grid-area: panel; background: var(--panel); border-left: 1px solid var(--line);
-  padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
-@media (orientation: portrait), (max-width: 700px) {
-  #panel { border-left: 0; border-top: 1px solid var(--line); display: grid;
-    grid-template-columns: 1fr 1fr; padding: 10px 16px; }
-  #panel .info { grid-column: 1 / -1; }
+
+/* ------------------------------------------------ kaart en panelen erboven */
+#mapWrap { position: relative; flex: 1; min-height: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+#stats { position: absolute; top: 12px; left: 12px; padding: 12px 16px; min-width: 200px; z-index: 2; }
+.speed { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.speed b { font-size: 2.2rem; line-height: 1; font-weight: 700; letter-spacing: -0.02em; }
+.speed span { color: var(--muted); font-weight: 600; }
+.stat-rows { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.stat-rows span { color: var(--muted); font-size: 0.92rem; }
+.stat-rows b { text-align: right; }
+#mapControls { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; overflow: hidden; z-index: 2; }
+#mapControls button { width: 52px; height: 52px; border: 0; background: transparent; display: grid; place-items: center; }
+#mapControls button + button { border-top: 1px solid var(--line); }
+#mapControls button.active { color: var(--brand-2); }
+#scale { position: absolute; left: 12px; bottom: 104px; padding: 6px 10px; font-size: 0.8rem; font-weight: 600;
+  color: var(--muted); z-index: 2; pointer-events: none; }
+#scaleBar { height: 4px; background: var(--text); border-radius: 2px; margin-top: 4px; }
+
+#banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: none; align-items: center;
+  gap: 14px; padding: 8px 8px 8px 16px; z-index: 2; background: var(--boundary); color: #fff; border: 0; max-width: calc(100% - 24px); }
+#banner.show { display: flex; }
+#banner .pulse { width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; flex: none; }
+#banner button { min-height: 44px; padding: 8px 16px; border-radius: 10px; border: 0; background: #fff; color: var(--boundary); font-weight: 700; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (max-width: 760px) {
+  #stats { right: 76px; min-width: 0; padding: 10px 14px; }
+  #banner { top: auto; bottom: 104px; }
 }
-button { font: inherit; font-weight: 600; min-height: 56px; padding: 10px 14px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer;
-  touch-action: manipulation; }
-button:active { transform: translateY(1px); }
-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-button.on { background: var(--work); color: #fff; border-color: var(--work); }
-button.rec { background: var(--boundary); color: #fff; border-color: var(--boundary); }
-button:disabled { opacity: 0.45; }
-.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 8px 2px;
-  font-variant-numeric: tabular-nums; }
-.info span:nth-child(odd) { color: var(--muted); }
-.info span:nth-child(even) { text-align: right; font-weight: 600; }
-dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text);
-  padding: 0; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-dialog form { padding: 16px; display: grid; gap: 12px; }
-dialog h2 { margin: 0; font-size: 1.2rem; }
-dialog h3 { margin: 8px 0 0; font-size: 1rem; color: var(--muted); }
-label { display: grid; gap: 4px; color: var(--muted); }
-input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
-  border-radius: 8px; padding: 12px; min-height: 48px; width: 100%; -webkit-user-select: text; user-select: text; }
-.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text);
-  color: var(--bg); padding: 12px 18px; border-radius: 10px; max-width: calc(100vw - 32px);
-  opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
-#toast.show { opacity: 1; }
+@media (max-width: 560px) {
+  .speed b { font-size: 1.7rem; }
+  .stat-rows { margin-top: 8px; padding-top: 8px; }
+  .stat-rows .opt-row { display: none; }
+  #scale { display: none; }
+}
+
+/* ------------------------------------------------ actiebalk */
+#actions { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px; padding: 8px; z-index: 2; }
+.act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 84px; min-height: 64px; padding: 6px 10px; border: 0; border-radius: 11px; background: transparent;
+  font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.act:active { background: var(--surface-2); }
+.act.active { background: color-mix(in srgb, var(--boundary) 14%, transparent); color: var(--boundary); }
+#btnWork { display: flex; align-items: center; justify-content: center; white-space: nowrap; border: 0; flex-direction: row; gap: 10px; min-width: 190px; min-height: 64px; padding: 0 22px; margin: 0 6px;
+  background: var(--brand); color: var(--on-brand); font-size: 1.05rem; font-weight: 700; border-radius: 12px; }
+#btnWork.on { background: var(--work); color: var(--on-work); }
+#btnWork .ic { width: 22px; height: 22px; }
+@media (max-width: 560px) {
+  #actions { left: 12px; right: 12px; transform: none; justify-content: space-between; }
+  .act { min-width: 0; flex: 1; font-size: 0.74rem; padding: 6px 2px; }
+  #btnWork { min-width: 0; flex: 1.6; padding: 0 12px; }
+}
+
+/* ------------------------------------------------ welkom / verbinden */
+#welcome { position: absolute; inset: 0; display: none; place-items: center; z-index: 4; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(3px); }
+#welcome.show { display: grid; }
+#welcome .card { width: min(520px, 100%); padding: 28px; text-align: center; }
+#welcome h1 { margin: 14px 0 6px; font-size: 1.4rem; letter-spacing: -0.01em; }
+#welcome p { margin: 0 0 20px; color: var(--muted); }
+#welcome .brand-mark { width: 56px; height: 56px; border-radius: 14px; margin: 0 auto; }
+#welcome .brand-mark .ic { width: 30px; height: 30px; }
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--brand-2);
+  animation: spin 0.9s linear infinite; margin: 4px auto 16px; display: none; }
+#welcome.waiting .spinner { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.opt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px; min-height: 96px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); font-weight: 600; }
+.opt .ic { width: 28px; height: 28px; color: var(--brand-2); }
+.opt small { color: var(--muted); font-weight: 500; font-size: 0.78rem; }
+.opt.selected { border-color: var(--brand-2); box-shadow: inset 0 0 0 1px var(--brand-2); }
+.link { border: 0; background: none; color: var(--brand-2); font-weight: 600; min-height: 44px; margin-top: 8px; }
+
+/* ------------------------------------------------ vensters */
+dialog { border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3); width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+dialog::backdrop { background: rgba(8, 12, 10, 0.5); }
+.sheet { display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
+.sheet header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px;
+  border-bottom: 1px solid var(--line); }
+.sheet header h2 { margin: 0; font-size: 1.2rem; }
+.sheet .body { padding: 8px 20px 20px; overflow: auto; }
+.sheet footer { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--line); }
+.icon-btn { width: 44px; height: 44px; border-radius: 10px; border: 0; background: var(--surface-2); display: grid; place-items: center; }
+.section { margin-top: 18px; }
+.section h3 { margin: 0 0 10px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fields .wide { grid-column: 1 / -1; }
+label { display: grid; gap: 6px; font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+input { font: inherit; font-weight: 500; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; min-height: 50px; width: 100%; -webkit-user-select: text; user-select: text; }
+input:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
+.unit { position: relative; }
+.unit input { padding-right: 44px; }
+.unit::after { content: attr(data-unit); position: absolute; right: 14px; bottom: 14px; color: var(--muted); font-weight: 600; }
+.segmented { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 4px; gap: 4px; }
+.segmented button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; font-weight: 600; color: var(--muted); }
+.segmented button.selected { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.btn { min-height: 50px; padding: 10px 20px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); font-weight: 700; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.btn.danger { background: transparent; border-color: color-mix(in srgb, var(--none) 45%, var(--line)); color: var(--none); }
+.btn.block { width: 100%; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.summary { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 14px 0 6px; font-variant-numeric: tabular-nums; }
+.summary span { color: var(--muted); }
+.summary b { text-align: right; }
+.note { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted);
+  font-size: 0.9rem; margin-top: 14px; }
+.note .ic { width: 20px; height: 20px; color: var(--brand-2); margin-top: 1px; }
+.about { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+.about b { color: var(--text); }
+#askText { margin: 12px 0 0; color: var(--muted); }
+
+#toast { position: fixed; left: 50%; bottom: 110px; transform: translate(-50%, 8px); background: var(--text); color: var(--bg);
+  padding: 12px 18px; border-radius: 12px; max-width: min(520px, calc(100vw - 32px)); font-weight: 600; text-align: center;
+  width: max-content; overflow-wrap: anywhere; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 10; box-shadow: var(--shadow); }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mark" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></symbol>
+  <symbol id="i-boundary" viewBox="0 0 24 24"><path d="M5 8l7-4 8 5-2 10-11-1z"/><circle cx="5" cy="8" r="1.4"/><circle cx="12" cy="4" r="1.4"/><circle cx="20" cy="9" r="1.4"/><circle cx="18" cy="19" r="1.4"/><circle cx="7" cy="18" r="1.4"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.8 16a5 5 0 0 1 6.4 0"/><circle cx="12" cy="19.3" r="0.9"/></symbol>
+  <symbol id="i-usb" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6.5 8h11v3.5a5.5 5.5 0 0 1-11 0zM12 17v4"/></symbol>
+  <symbol id="i-demo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></symbol>
+</svg>
+
 <div id="app">
-  <header id="status">
-    <span class="pill" id="conn">Niet verbonden</span>
-    <span class="pill bad" id="fix">Geen fix</span>
-    <span class="pill" id="sats">Sat <b>-</b></span>
-    <span class="pill" id="hdop">HDOP <b>-</b></span>
-    <span class="pill" id="speed"><b>-</b> km/u</span>
+  <header id="topbar">
+    <div class="brand"><span class="brand-mark"><svg class="ic"><use href="#i-mark"/></svg></span><span class="brand-name" id="brandName">Trekker-GPS</span></div>
+    <button id="fieldBtn" title="Perceel wijzigen"><span id="fieldName">Perceel</span><svg class="ic"><use href="#i-edit"/></svg></button>
+    <div class="chips">
+      <span class="chip" id="fix" data-q="none">Geen fix</span>
+      <span class="chip" id="sats"><span id="satsValue">–</span> sat</span>
+      <span class="chip" id="conn" data-state="off"><svg class="ic"><use href="#i-wifi"/></svg><span id="connLabel">Offline</span></span>
+    </div>
   </header>
-  <div id="mapWrap">
-    <canvas id="map"></canvas>
-    <div id="mapButtons">
-      <button id="zoomIn" title="Inzoomen" aria-label="Inzoomen">+</button>
-      <button id="zoomOut" title="Uitzoomen" aria-label="Uitzoomen">&minus;</button>
-      <button id="center" title="Volg tractor" aria-label="Volg tractor">&#9678;</button>
+
+  <main id="mapWrap">
+    <canvas id="map" aria-label="Kaart van het perceel"></canvas>
+
+    <section id="stats" class="card" aria-label="Werkgegevens">
+      <div class="speed"><b id="speedValue">0,0</b><span>km/u</span></div>
+      <div class="stat-rows">
+        <span>Bewerkt</span><b id="areaWorked">0,00 ha</b>
+        <span>Perceel</span><b id="areaField">–</b>
+        <span class="opt-row">Werkbreedte</span><b class="opt-row" id="widthInfo">–</b>
+      </div>
+    </section>
+
+    <div id="banner" class="card" role="status"><span class="pulse"></span><span>Grens opnemen: rij rond het perceel</span><button id="bannerDone">Klaar</button></div>
+
+    <div id="mapControls" class="card">
+      <button id="zoomIn" aria-label="Inzoomen"><svg class="ic"><use href="#i-plus"/></svg></button>
+      <button id="zoomOut" aria-label="Uitzoomen"><svg class="ic"><use href="#i-minus"/></svg></button>
+      <button id="center" class="active" aria-label="Tractor volgen"><svg class="ic"><use href="#i-locate"/></svg></button>
     </div>
-  </div>
-  <aside id="panel">
-    <button id="btnBoundary">Grens opnemen</button>
-    <button id="btnWork">Werk AAN</button>
-    <button id="btnExport" class="primary">ISOXML exporteren</button>
-    <button id="btnSettings">Instellingen</button>
-    <div class="info">
-      <span>Perceel</span><span id="fieldName">-</span>
-      <span>Oppervlakte</span><span id="areaField">-</span>
-      <span>Bewerkt</span><span id="areaWorked">-</span>
-      <span>Werkbreedte</span><span id="widthInfo">-</span>
+
+    <div id="scale" class="card"><span id="scaleLabel">50 m</span><div id="scaleBar"></div></div>
+
+    <nav id="actions" class="card" aria-label="Acties">
+      <button class="act" id="btnBoundary"><svg class="ic"><use href="#i-boundary"/></svg>Grens</button>
+      <button id="btnWork"><svg class="ic fill"><use href="#i-play"/></svg><span>Start werk</span></button>
+      <button class="act" id="btnExport"><svg class="ic"><use href="#i-export"/></svg>Exporteer</button>
+      <button class="act" id="btnSettings"><svg class="ic"><use href="#i-menu"/></svg>Instellingen</button>
+    </nav>
+
+    <div id="welcome">
+      <div class="card">
+        <span class="brand-mark"><svg class="ic"><use href="#i-mark"/></svg></span>
+        <h1 id="welcomeTitle">Verbind met je GPS</h1>
+        <p id="welcomeText">Kies hoe deze tablet het GPS-signaal ontvangt.</p>
+        <div class="spinner"></div>
+        <div class="options" id="welcomeOptions">
+          <button class="opt" id="welWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi<small>GPS-kastje</small></button>
+          <button class="opt" id="welUsb"><svg class="ic"><use href="#i-usb"/></svg>USB<small>kabel</small></button>
+          <button class="opt" id="welDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo<small>uitproberen</small></button>
+        </div>
+        <button class="link" id="welOther" hidden>Andere verbinding kiezen</button>
+      </div>
     </div>
-  </aside>
+  </main>
 </div>
 
 <dialog id="settings">
-  <form method="dialog">
-    <h2>Instellingen</h2>
-    <label>Naam perceel <input id="setField" autocomplete="off"></label>
-    <div class="row">
-      <label>Klant <input id="setCustomer" autocomplete="off"></label>
-      <label>Bedrijf <input id="setFarm" autocomplete="off"></label>
+  <form method="dialog" class="sheet">
+    <header><h2>Instellingen</h2><button class="icon-btn" value="close" aria-label="Sluiten"><svg class="ic"><use href="#i-close"/></svg></button></header>
+    <div class="body">
+      <div class="section">
+        <h3>Perceel</h3>
+        <div class="fields">
+          <label class="wide">Naam <input id="setField" autocomplete="off" maxlength="60"></label>
+          <label>Klant <input id="setCustomer" autocomplete="off" maxlength="60"></label>
+          <label>Bedrijf <input id="setFarm" autocomplete="off" maxlength="60"></label>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Werktuig</h3>
+        <div class="fields">
+          <label>Werkbreedte <span class="unit" data-unit="m"><input id="setWidth" type="number" min="0.5" max="60" step="0.1" inputmode="decimal"></span></label>
+        </div>
+      </div>
+      <div class="section">
+        <h3>GPS-verbinding</h3>
+        <div class="options">
+          <button type="button" class="opt" id="connWifi"><svg class="ic"><use href="#i-wifi"/></svg>Wifi</button>
+          <button type="button" class="opt" id="connUsb"><svg class="ic"><use href="#i-usb"/></svg>USB</button>
+          <button type="button" class="opt" id="connDemo"><svg class="ic"><use href="#i-demo"/></svg>Demo</button>
+        </div>
+        <div class="fields" style="margin-top:10px">
+          <label class="wide">Adres GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Weergave</h3>
+        <div class="segmented" id="themeSel">
+          <button type="button" data-theme="auto">Automatisch</button>
+          <button type="button" data-theme="light">Dag</button>
+          <button type="button" data-theme="dark">Nacht</button>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Gegevens</h3>
+        <div class="row2">
+          <button type="button" class="btn danger" id="clearBoundary">Grens wissen</button>
+          <button type="button" class="btn danger" id="newField">Nieuw perceel</button>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Over</h3>
+        <div class="about" id="aboutText"></div>
+      </div>
     </div>
-    <label>Werkbreedte (m) <input id="setWidth" type="number" min="0.5" max="60" step="0.1" inputmode="decimal"></label>
-    <h3>GPS-verbinding</h3>
-    <label>Adres van het GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
-    <div class="row">
-      <button type="button" id="connWifi">Wifi</button>
-      <button type="button" id="connUsb">USB-kabel</button>
-      <button type="button" id="connDemo">Demo</button>
+  </form>
+</dialog>
+
+<dialog id="exportDialog">
+  <form method="dialog" class="sheet">
+    <header><h2>ISOXML exporteren</h2><button class="icon-btn" value="cancel" aria-label="Sluiten"><svg class="ic"><use href="#i-close"/></svg></button></header>
+    <div class="body">
+      <div class="summary">
+        <span>Perceel</span><b id="expField">–</b>
+        <span>Klant</span><b id="expCustomer">–</b>
+        <span>Oppervlakte</span><b id="expArea">–</b>
+        <span>Bewerkt</span><b id="expWorked">–</b>
+        <span>Rijspoor</span><b id="expTrack">–</b>
+      </div>
+      <div class="note"><svg class="ic"><use href="#i-info"/></svg><span>Je krijgt een zip-bestand. Pak het uit en zet de map <b>TASKDATA</b> in de hoofdmap van een USB-stick voor de terminal of je bedrijfssoftware.</span></div>
     </div>
-    <h3>Perceel</h3>
-    <div class="row">
-      <button type="button" id="clearBoundary">Grens wissen</button>
-      <button type="button" id="newField">Nieuw perceel</button>
+    <footer>
+      <button class="btn" value="cancel">Annuleren</button>
+      <button type="button" class="btn primary" id="exportDownload">Downloaden</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="askDialog">
+  <form method="dialog" class="sheet">
+    <div class="body" style="padding-top:20px">
+      <h2 id="askTitle" style="margin:0;font-size:1.2rem">Zeker?</h2>
+      <p id="askText"></p>
     </div>
-    <button value="close" class="primary">Sluiten</button>
+    <footer>
+      <button class="btn" value="cancel" id="askCancel">Annuleren</button>
+      <button class="btn primary" value="ok" id="askOk">OK</button>
+    </footer>
   </form>
 </dialog>
 
 <div id="toast" role="status" aria-live="polite"></div>
+<script>
+// brand.js - productnaam, versie en vermeldingen. Pas hier aan om de app te herbenoemen.
+(function (root) {
+  'use strict';
+  const brand = {
+    name: 'Trekker-GPS',
+    version: '0.2.0',
+    company: '',  // naam van jullie bedrijf, verschijnt bij "Over"
+    credits: 'Ontwikkeld met hulp van Claude, een AI-assistent van Anthropic.',
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = brand;
+  else root.TG = Object.assign(root.TG || {}, { brand });
+})(this);
+</script>
 <script>
 // nmea.js - NMEA 0183 lezen: GGA, VTG, RMC en ZDA.
 (function (root) {
@@ -647,12 +887,13 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
 // app.js - het scherm: kaart, knoppen, verbinding met het GPS-kastje en opslaan.
 (function () {
   'use strict';
-  const { nmea, geo, isoxml, zip, demo } = window.TG;
+  const { nmea, geo, isoxml, zip, demo, brand } = window.TG;
   const STORE_KEY = 'trekkergps.v1';
   const $ = id => document.getElementById(id);
+  const nl = (n, d) => n.toLocaleString('nl-BE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
   // ---------------------------------------------------------------- toestand
-  const settings = { field: 'Perceel 1', customer: '', farm: '', workWidth: 12, host: '', connection: '' };
+  const settings = { field: 'Perceel 1', customer: '', farm: '', workWidth: 12, host: '', connection: '', theme: 'auto' };
 
   function newField() {
     return { origin: null, boundary: [], runs: [], log: [], workedM2: 0 };
@@ -679,7 +920,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
       localStorage.setItem(STORE_KEY, JSON.stringify({ settings, field }));
       dirty = false;
     } catch (e) {
-      toast('Opslaan in de tablet lukt niet. Exporteer het perceel.');
+      toast('Opslaan op de tablet lukt niet. Exporteer het perceel.');
     }
   }
 
@@ -737,6 +978,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
       }
     }
 
+    if (!last) showWelcome(false);
     last = Object.assign({}, pos, { xy });
     lastDataAt = Date.now();
     if (view.follow) { view.cx = xy.x; view.cy = xy.y; }
@@ -751,6 +993,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
   function disconnect() {
     if (conn) { try { conn.close(); } catch (e) { /* al dicht */ } }
     conn = null;
+    last = null;
   }
 
   function connectWifi() {
@@ -758,26 +1001,28 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     const host = settings.host || location.host || '192.168.4.1';
     let ws = null, closed = false, retry = null;
     const open = () => {
-      setConn('Verbinden met ' + host + '…');
+      setConn('Verbinden', 'off', 'i-wifi');
       try { ws = new WebSocket('ws://' + host + '/ws'); } catch (e) { ws = null; }
       if (!ws) { retry = setTimeout(open, 3000); return; }
-      ws.onopen = () => setConn('Wifi', 'ok');
+      ws.onopen = () => setConn('Wifi', 'ok', 'i-wifi');
       ws.onmessage = ev => { if (typeof ev.data === 'string') parser.feed(ev.data); };
       ws.onclose = () => {
         if (closed) return;
-        setConn('Wifi verbroken', 'bad');
+        setConn('Verbroken', 'bad', 'i-wifi');
         retry = setTimeout(open, 2000);
       };
     };
     conn = { type: 'wifi', close() { closed = true; clearTimeout(retry); if (ws) ws.close(); } };
     settings.connection = 'wifi';
     dirty = true;
+    showWelcome(true, 'Verbinden met het GPS-kastje', 'Zorg dat de tablet verbonden is met het wifinetwerk ' +
+      'van het kastje (' + host + ').');
     open();
   }
 
   async function connectUsb() {
     if (!('serial' in navigator)) {
-      toast('USB werkt alleen in Chrome of Edge op een computer of Windows-tablet.');
+      toast('USB werkt in Chrome of Edge op een Windows-tablet of computer.');
       return;
     }
     let port;
@@ -791,12 +1036,14 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     try {
       await port.open({ baudRate: 115200 });
     } catch (e) {
-      setConn('USB-poort bezet', 'bad');
+      setConn('USB bezet', 'bad', 'i-usb');
+      toast('De USB-poort is in gebruik door een ander programma.');
       return;
     }
-    setConn('USB', 'ok');
+    setConn('USB', 'ok', 'i-usb');
     settings.connection = 'usb';
     dirty = true;
+    showWelcome(true, 'Wachten op GPS-signaal', 'Verbonden via USB.');
     const decoder = new TextDecoder();
     try {
       while (!closed && port.readable) {
@@ -812,7 +1059,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
         }
       }
     } catch (e) {
-      if (!closed) setConn('USB verbroken', 'bad');
+      if (!closed) setConn('USB los', 'bad', 'i-usb');
     }
     try { await port.close(); } catch (e) { /* al dicht */ }
   }
@@ -822,19 +1069,44 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     const d = new demo.DemoTractor(text => parser.feed(text), { workWidth: settings.workWidth });
     d.start();
     conn = { type: 'demo', close() { d.stop(); } };
-    setConn('Demo', 'warn');
+    setConn('Demo', 'ok', 'i-demo');
     settings.connection = 'demo';
     dirty = true;
+    showWelcome(true, 'Demo starten', 'Een gesimuleerde tractor rijdt een perceel af.');
+  }
+
+  // ---------------------------------------------------------------- vensters
+  function ask(title, text, okLabel, danger) {
+    const d = $('askDialog');
+    $('askTitle').textContent = title;
+    $('askText').textContent = text;
+    const ok = $('askOk');
+    ok.textContent = okLabel || 'OK';
+    ok.className = 'btn ' + (danger ? 'danger' : 'primary');
+    d.returnValue = '';
+    d.showModal();
+    return new Promise(resolve => d.addEventListener('close', () => resolve(d.returnValue === 'ok'), { once: true }));
+  }
+
+  function showWelcome(show, title, text) {
+    const w = $('welcome');
+    w.classList.toggle('show', show);
+    const waiting = show && !!conn;
+    w.classList.toggle('waiting', waiting);
+    $('welcomeOptions').hidden = waiting;
+    $('welOther').hidden = !waiting;
+    $('welcomeTitle').textContent = title || 'Verbind met je GPS';
+    $('welcomeText').textContent = text || 'Kies hoe deze tablet het GPS-signaal ontvangt.';
   }
 
   // ---------------------------------------------------------------- knoppen
-  function toggleBoundary() {
+  async function toggleBoundary() {
     if (!recordingBoundary) {
-      if (field.boundary.length && !confirm('De huidige grens vervangen door een nieuwe?')) return;
+      if (field.boundary.length &&
+          !await ask('Nieuwe grens opnemen?', 'De huidige perceelgrens wordt vervangen.', 'Vervangen', true)) return;
       field.boundary = [];
       cache.boundary = [];
       recordingBoundary = true;
-      toast('Rij rond het perceel. Druk op "Grens stoppen" als je rond bent.');
     } else {
       recordingBoundary = false;
       if (field.boundary.length < 3) {
@@ -866,14 +1138,25 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     requestDraw();
   }
 
-  function exportIsoxml() {
+  function openExport() {
     if (!field.boundary.length && !field.log.length) {
-      toast('Er is nog niets om te exporteren. Neem een grens op of werk het perceel.');
+      toast('Neem eerst een grens op of start het werk.');
       return;
     }
+    $('expField').textContent = settings.field || '–';
+    $('expCustomer').textContent = [settings.customer, settings.farm].filter(Boolean).join(', ') || '–';
+    $('expArea').textContent = field.boundary.length >= 3 ? fmtHa(geo.areaLatLon(field.boundary)) : 'geen grens';
+    $('expWorked').textContent = fmtHa(field.workedM2);
+    const secs = field.log.length > 1 ? (field.log[field.log.length - 1].t - field.log[0].t) / 1000 : 0;
+    $('expTrack').textContent = field.log.length ? nl(field.log.length, 0) + ' punten, ' + fmtDuration(secs) : 'geen';
+    $('exportDialog').showModal();
+  }
+
+  function downloadIsoxml() {
     const files = isoxml.buildTaskData({
       customer: settings.customer, farm: settings.farm, field: settings.field,
       boundary: field.boundary, areaM2: geo.areaLatLon(field.boundary), log: field.log,
+      software: brand.name, version: brand.version,
     });
     const data = zip.makeZip(files);
     const d = new Date();
@@ -887,12 +1170,14 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast('Opgeslagen als ' + name + '. Pak uit en zet de map TASKDATA op de USB-stick.');
+    $('exportDialog').close();
+    toast('Opgeslagen als ' + name);
   }
 
-  function newFieldClicked() {
+  async function newFieldClicked() {
     if ((field.boundary.length || field.log.length) &&
-        !confirm('Alles van dit perceel wissen? Exporteer eerst als je het wilt bewaren.')) return;
+        !await ask('Nieuw perceel beginnen?', 'De grens en het rijspoor van dit perceel worden gewist. ' +
+          'Exporteer eerst als je ze wilt bewaren.', 'Wissen', true)) return;
     field = newField();
     frame = null;
     cache = { boundary: [], runs: [] };
@@ -907,38 +1192,58 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
   }
 
   // ---------------------------------------------------------------- weergave
-  function fmtHa(m2) { return (m2 / 10000).toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha'; }
+  function fmtHa(m2) { return nl(m2 / 10000, 2) + ' ha'; }
+  function fmtDuration(s) {
+    const m = Math.round(s / 60);
+    return m < 60 ? m + ' min' : Math.floor(m / 60) + ' u ' + String(m % 60).padStart(2, '0');
+  }
 
-  function setConn(text, cls) {
+  function setConn(text, state, icon) {
     const el = $('conn');
-    el.textContent = text;
-    el.className = 'pill' + (cls ? ' ' + cls : '');
+    el.dataset.state = state;
+    el.querySelector('use').setAttribute('href', '#' + (icon || 'i-wifi'));
+    $('connLabel').textContent = text;
+  }
+
+  function qualityClass(q) {
+    if (q === 4) return 'good';
+    if (q === 5 || q === 2) return 'fair';
+    if (q === 1 || q === 3 || q === 6) return 'poor';
+    return 'none';
   }
 
   function updateStatus() {
     const st = parser.state;
     const fix = $('fix');
     fix.textContent = nmea.QUALITY_NAMES[st.quality] || ('Fix ' + st.quality);
-    fix.className = 'pill ' + (st.quality === 4 ? 'ok' : st.quality === 5 || st.quality === 2 ? 'warn' : st.quality === 1 ? 'warn' : 'bad');
-    $('sats').innerHTML = 'Sat <b>' + (st.sats ?? '-') + '</b>';
-    $('hdop').innerHTML = 'HDOP <b>' + (st.hdop ?? '-') + '</b>';
-    $('speed').innerHTML = '<b>' + (st.speedKmh === null ? '-' : st.speedKmh.toFixed(1)) + '</b> km/u';
+    fix.dataset.q = qualityClass(st.quality);
+    fix.title = 'HDOP ' + (st.hdop ?? '–');
+    $('satsValue').textContent = st.sats ?? '–';
+    $('speedValue').textContent = st.speedKmh === null ? '0,0' : nl(st.speedKmh, 1);
   }
 
   function updateInfo() {
-    $('fieldName').textContent = settings.field || '-';
-    $('areaField').textContent = field.boundary.length >= 3 ? fmtHa(geo.areaLatLon(field.boundary)) : '-';
+    $('fieldName').textContent = settings.field || 'Perceel';
+    $('areaField').textContent = field.boundary.length >= 3 ? fmtHa(geo.areaLatLon(field.boundary)) : '–';
     $('areaWorked').textContent = fmtHa(field.workedM2);
-    $('widthInfo').textContent = settings.workWidth.toLocaleString('nl-BE') + ' m';
+    $('widthInfo').textContent = nl(settings.workWidth, settings.workWidth % 1 ? 1 : 0) + ' m';
   }
 
   function updateButtons() {
-    const b = $('btnBoundary');
-    b.textContent = recordingBoundary ? 'Grens stoppen' : 'Grens opnemen';
-    b.classList.toggle('rec', recordingBoundary);
+    $('btnBoundary').classList.toggle('active', recordingBoundary);
+    $('banner').classList.toggle('show', recordingBoundary);
     const w = $('btnWork');
-    w.textContent = working ? 'Werk UIT' : 'Werk AAN';
     w.classList.toggle('on', working);
+    w.querySelector('use').setAttribute('href', working ? '#i-stop' : '#i-play');
+    w.querySelector('span').textContent = working ? 'Stop werk' : 'Start werk';
+    $('center').classList.toggle('active', view.follow);
+  }
+
+  function applyTheme() {
+    if (settings.theme === 'light' || settings.theme === 'dark') document.documentElement.dataset.theme = settings.theme;
+    else delete document.documentElement.dataset.theme;
+    document.querySelectorAll('#themeSel button').forEach(b => b.classList.toggle('selected', b.dataset.theme === settings.theme));
+    requestDraw();
   }
 
   let toastTimer = null;
@@ -947,7 +1252,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 4500);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
   }
 
   // ---------------------------------------------------------------- kaart tekenen
@@ -962,6 +1267,16 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
   }
 
   function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
 
   function draw() {
     const dpr = window.devicePixelRatio || 1;
@@ -979,16 +1294,27 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     ctx.fillRect(0, 0, W, H);
 
     // raster
-    const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
-    const grid = steps.find(g => g * s >= 60) || 1000;
+    const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
+    const grid = steps.find(g => g * s >= 70) || 2000;
     ctx.strokeStyle = css('--grid');
     ctx.lineWidth = 1;
     ctx.beginPath();
     const x0 = Math.floor((view.cx - W / 2 / s) / grid) * grid, x1 = view.cx + W / 2 / s;
     const y0 = Math.floor((view.cy - H / 2 / s) / grid) * grid, y1 = view.cy + H / 2 / s;
-    for (let x = x0; x <= x1; x += grid) { ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), H); }
-    for (let y = y0; y <= y1; y += grid) { ctx.moveTo(0, sy(y)); ctx.lineTo(W, sy(y)); }
+    for (let x = x0; x <= x1; x += grid) { const px = Math.round(sx(x)) + 0.5; ctx.moveTo(px, 0); ctx.lineTo(px, H); }
+    for (let y = y0; y <= y1; y += grid) { const py = Math.round(sy(y)) + 0.5; ctx.moveTo(0, py); ctx.lineTo(W, py); }
     ctx.stroke();
+
+    // perceel invullen
+    const bnd = cache.boundary;
+    if (bnd.length > 2 && !recordingBoundary) {
+      ctx.beginPath();
+      ctx.moveTo(sx(bnd[0].x), sy(bnd[0].y));
+      for (let i = 1; i < bnd.length; i++) ctx.lineTo(sx(bnd[i].x), sy(bnd[i].y));
+      ctx.closePath();
+      ctx.fillStyle = css('--field-fill');
+      ctx.fill();
+    }
 
     // bewerkte stroken
     ctx.strokeStyle = css('--cover');
@@ -1004,21 +1330,19 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     }
 
     // perceelgrens
-    const bnd = cache.boundary;
     if (bnd.length > 1) {
       ctx.beginPath();
       ctx.moveTo(sx(bnd[0].x), sy(bnd[0].y));
       for (let i = 1; i < bnd.length; i++) ctx.lineTo(sx(bnd[i].x), sy(bnd[i].y));
-      if (recordingBoundary && last) {
-        ctx.lineTo(sx(last.xy.x), sy(last.xy.y));
-        ctx.setLineDash([10, 8]);
-      } else {
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(43, 138, 62, 0.08)';
-        ctx.fill();
-      }
+      if (recordingBoundary && last) ctx.lineTo(sx(last.xy.x), sy(last.xy.y));
+      else ctx.closePath();
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = css('--surface');
+      ctx.lineWidth = 6;
+      ctx.stroke();
       ctx.strokeStyle = css('--boundary');
       ctx.lineWidth = 3;
+      if (recordingBoundary) ctx.setLineDash([12, 8]);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -1026,39 +1350,39 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     // tractor met werktuig
     if (last) {
       const px = sx(last.xy.x), py = sy(last.xy.y);
-      const a = heading * Math.PI / 180;
       ctx.save();
       ctx.translate(px, py);
-      ctx.rotate(a);
+      ctx.rotate(heading * Math.PI / 180);
+      const m = Math.max(s, 9);               // tractor altijd goed zichtbaar
       const half = settings.workWidth * s / 2;
-      ctx.fillStyle = working ? css('--work') : css('--muted');
-      ctx.fillRect(-half, 6, half * 2, Math.max(4, 0.6 * s));
-      const L = Math.max(22, 5 * s), B = Math.max(14, 2.8 * s);
-      ctx.beginPath();
-      ctx.moveTo(0, -L * 0.6);
-      ctx.lineTo(B / 2, L * 0.4);
-      ctx.lineTo(-B / 2, L * 0.4);
-      ctx.closePath();
-      ctx.fillStyle = css('--accent');
-      ctx.strokeStyle = css('--panel');
+      // werktuig achter de tractor
+      ctx.strokeStyle = css('--muted');
       ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 1.6 * m); ctx.lineTo(0, 2.6 * m); ctx.stroke();
+      ctx.fillStyle = working ? css('--work') : css('--muted');
+      roundRect(-half, 2.6 * m, half * 2, Math.max(5, 0.7 * m), 2);
       ctx.fill();
-      ctx.stroke();
+      // tractor: carrosserie en cabine, neus naar boven
+      ctx.shadowColor = 'rgba(0,0,0,0.25)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = css('--brand');
+      roundRect(-1.1 * m, -2.4 * m, 2.2 * m, 4.0 * m, 0.5 * m);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = css('--surface');
+      roundRect(-0.75 * m, -0.1 * m, 1.5 * m, 1.3 * m, 0.25 * m);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -3.3 * m); ctx.lineTo(0.7 * m, -2.5 * m); ctx.lineTo(-0.7 * m, -2.5 * m); ctx.closePath();
+      ctx.fillStyle = css('--brand-2');
+      ctx.fill();
       ctx.restore();
-    } else {
-      ctx.fillStyle = css('--muted');
-      ctx.font = '600 18px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(conn ? 'Wachten op GPS-positie…' : 'Kies een verbinding bij Instellingen', W / 2, H / 2);
     }
 
     // schaalbalk
-    const barM = steps.find(g => g * s >= 80) || 1000;
-    ctx.fillStyle = css('--text');
-    ctx.fillRect(16, H - 22, barM * s, 4);
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(barM + ' m', 16, H - 30);
+    const barM = steps.find(g => g * s >= 70) || 2000;
+    $('scaleLabel').textContent = barM >= 1000 ? (barM / 1000) + ' km' : barM + ' m';
+    $('scaleBar').style.width = Math.round(barM * s) + 'px';
   }
 
   // ---------------------------------------------------------------- aanraken en zoomen
@@ -1066,7 +1390,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
   let pinchStart = null;
 
   function zoom(factor) {
-    view.scale = Math.min(80, Math.max(0.1, view.scale * factor));
+    view.scale = Math.min(80, Math.max(0.05, view.scale * factor));
     requestDraw();
   }
 
@@ -1084,14 +1408,16 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     const cur = { x: e.clientX, y: e.clientY };
     pointers.set(e.pointerId, cur);
     if (pointers.size === 1) {
+      if (view.follow && Math.hypot(cur.x - prev.x, cur.y - prev.y) < 1) return;
       view.follow = false;
+      $('center').classList.remove('active');
       view.cx -= (cur.x - prev.x) / view.scale;
       view.cy += (cur.y - prev.y) / view.scale;
       requestDraw();
     } else if (pointers.size === 2 && pinchStart) {
       const [p, q] = [...pointers.values()];
       const d = Math.hypot(p.x - q.x, p.y - q.y);
-      view.scale = Math.min(80, Math.max(0.1, pinchStart.scale * d / pinchStart.d));
+      view.scale = Math.min(80, Math.max(0.05, pinchStart.scale * d / pinchStart.d));
       requestDraw();
     }
   });
@@ -1109,7 +1435,10 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     $('setFarm').value = settings.farm;
     $('setWidth').value = settings.workWidth;
     $('setHost').value = settings.host;
-    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+    document.querySelectorAll('#settings .opt').forEach(b =>
+      b.classList.toggle('selected', conn && b.id === 'conn' + conn.type[0].toUpperCase() + conn.type.slice(1)));
+    applyTheme();
+    dlg.showModal();
   }
 
   function readSettings() {
@@ -1124,42 +1453,71 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     requestDraw();
   }
 
+  function renderAbout() {
+    const el = $('aboutText');
+    el.textContent = '';
+    const line = (txt, bold) => {
+      const div = document.createElement('div');
+      if (bold) { const b = document.createElement('b'); b.textContent = txt; div.appendChild(b); } else div.textContent = txt;
+      el.appendChild(div);
+    };
+    line(brand.name + ' ' + brand.version, true);
+    if (brand.company) line(brand.company);
+    line('ISOXML-export volgens ISO 11783-10, versie 3.');
+    line(brand.credits);
+  }
+
   dlg.addEventListener('close', readSettings);
-  $('connWifi').onclick = () => { readSettings(); connectWifi(); dlg.close(); };
-  $('connUsb').onclick = () => { readSettings(); connectUsb(); dlg.close(); };
-  $('connDemo').onclick = () => { readSettings(); connectDemo(); dlg.close(); };
-  $('clearBoundary').onclick = () => {
-    if (!field.boundary.length || !confirm('De perceelgrens wissen?')) return;
+  $('connWifi').onclick = () => { readSettings(); dlg.close(); connectWifi(); };
+  $('connUsb').onclick = () => { readSettings(); dlg.close(); connectUsb(); };
+  $('connDemo').onclick = () => { readSettings(); dlg.close(); connectDemo(); };
+  document.querySelectorAll('#themeSel button').forEach(b => {
+    b.onclick = () => { settings.theme = b.dataset.theme; dirty = true; applyTheme(); };
+  });
+  $('clearBoundary').onclick = async () => {
+    if (!field.boundary.length) { toast('Er is geen grens om te wissen.'); return; }
+    dlg.close();
+    if (!await ask('Grens wissen?', 'De perceelgrens wordt verwijderd. Het rijspoor blijft bewaard.', 'Wissen', true)) return;
     field.boundary = [];
     cache.boundary = [];
     recordingBoundary = false;
     dirty = true;
     updateButtons(); updateInfo(); requestDraw();
   };
-  $('newField').onclick = () => { newFieldClicked(); dlg.close(); };
+  $('newField').onclick = () => { dlg.close(); newFieldClicked(); };
+
+  $('welWifi').onclick = connectWifi;
+  $('welUsb').onclick = connectUsb;
+  $('welDemo').onclick = connectDemo;
+  $('welOther').onclick = () => { disconnect(); setConn('Offline', 'off', 'i-wifi'); showWelcome(true); };
 
   $('btnBoundary').onclick = toggleBoundary;
+  $('bannerDone').onclick = toggleBoundary;
   $('btnWork').onclick = toggleWork;
-  $('btnExport').onclick = exportIsoxml;
+  $('btnExport').onclick = openExport;
+  $('exportDownload').onclick = downloadIsoxml;
   $('btnSettings').onclick = openSettings;
+  $('fieldBtn').onclick = () => { openSettings(); $('setField').focus(); };
   $('zoomIn').onclick = () => zoom(1.5);
   $('zoomOut').onclick = () => zoom(1 / 1.5);
   $('center').onclick = () => {
     view.follow = true;
     if (last) { view.cx = last.xy.x; view.cy = last.xy.y; }
+    updateButtons();
     requestDraw();
   };
 
   // ---------------------------------------------------------------- opstarten
   window.addEventListener('resize', requestDraw);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', requestDraw);
   window.addEventListener('pagehide', () => { dirty = true; save(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { dirty = true; save(); } });
   setInterval(save, 3000);
   setInterval(() => {
     if (conn && lastDataAt && Date.now() - lastDataAt > 3000) {
       const fix = $('fix');
-      fix.textContent = 'Geen data';
-      fix.className = 'pill bad';
+      fix.textContent = 'Geen signaal';
+      fix.dataset.q = 'none';
     }
   }, 1000);
 
@@ -1170,7 +1528,11 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
   document.addEventListener('visibilitychange', () => { if (!document.hidden) keepAwake(); });
   keepAwake();
 
+  document.title = brand.name;
+  $('brandName').textContent = brand.name;
   load();
+  applyTheme();
+  renderAbout();
   updateStatus();
   updateInfo();
   updateButtons();
@@ -1181,6 +1543,7 @@ input { font: inherit; color: var(--text); background: var(--bg); border: 1px so
     location.hostname !== '127.0.0.1';
   if (servedByBox || settings.connection === 'wifi') connectWifi();
   else if (settings.connection === 'demo') connectDemo();
+  else showWelcome(true);
 
   // Voor tests
   window.TG.appState = () => ({ settings, field, recordingBoundary, working, last, view });

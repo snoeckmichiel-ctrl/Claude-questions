@@ -26,19 +26,33 @@ function check(cond, msg) {
   page.on('dialog', d => d.accept());
   await page.clock.install();
   await page.goto(url);
+  await page.clock.runFor(300);
+  check(await page.isVisible('#welcome'), 'welkomstscherm bij eerste start');
+  await page.screenshot({ path: path.join(outDir, '1-welkom.png') });
+
+  await page.click('#welDemo');
+  await page.clock.runFor(2000);
+  check(!(await page.isVisible('#welcome')), 'welkomstscherm verdwijnt bij GPS-positie');
+  check(await page.textContent('#fix') === 'RTK fix', 'demo geeft RTK fix');
 
   await page.click('#btnSettings');
   await page.fill('#setField', 'Achter de schuur');
   await page.fill('#setCustomer', 'Snoeck');
+  await page.fill('#setFarm', 'Hoeve De Linde');
   await page.fill('#setWidth', '12');
-  await page.click('#connDemo');
-  await page.clock.runFor(2000);
-  check(await page.textContent('#fix') === 'RTK fix', 'demo geeft RTK fix');
+  await page.clock.runFor(300);
+  await page.screenshot({ path: path.join(outDir, '4-instellingen.png') });
+  await page.click('#settings button[value="close"]');
+  await page.clock.runFor(200);
+  check(await page.textContent('#fieldName') === 'Achter de schuur', 'perceelnaam in de bovenbalk');
 
   // Grens: de demo rijdt eerst rond een perceel van 200 x 120 m aan 12 km/u (192 s).
   await page.click('#btnBoundary');
-  await page.clock.runFor(191000);
-  await page.click('#btnBoundary');
+  await page.clock.runFor(100000);
+  check(await page.isVisible('#banner'), 'melding tijdens grens opnemen');
+  await page.screenshot({ path: path.join(outDir, '2-grens-opnemen.png') });
+  await page.clock.runFor(91000);
+  await page.click('#bannerDone');
   const st1 = await page.evaluate(() => TG.appState());
   const area = await page.evaluate(() => TG.geo.areaLatLon(TG.appState().field.boundary));
   check(Math.abs(area - 24000) < 600, 'perceeloppervlakte ' + Math.round(area) + ' m², verwacht ongeveer 24000');
@@ -63,11 +77,14 @@ function check(cond, msg) {
   await page.click('#btnWork');
   await page.clock.runFor(20000);
 
-  await page.screenshot({ path: path.join(outDir, 'trekker-gps-demo.png') });
+  await page.screenshot({ path: path.join(outDir, '3-werken.png') });
   await page.click('#btnWork');  // werk uit, zodat het spoor niet meer groeit tijdens de export
 
   // Export
-  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnExport')]);
+  await page.click('#btnExport');
+  await page.clock.runFor(300);
+  await page.screenshot({ path: path.join(outDir, '5-export.png') });
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#exportDownload')]);
   const zipPath = path.join(outDir, download.suggestedFilename());
   await download.saveAs(zipPath);
   check(/^TASKDATA_Achter_de_schuur_\d{8}\.zip$/.test(download.suggestedFilename()), 'bestandsnaam ' + download.suggestedFilename());
@@ -92,10 +109,19 @@ print(json.dumps({
 
   check(errors.length === 0, 'geen JavaScript-fouten' + (errors.length ? ': ' + errors.join('; ') : ''));
 
-  // Ook op een tablet in staande stand
+  // Nachtmodus en een tablet in staande stand
+  await page.click('#btnSettings');
+  await page.click('#themeSel button[data-theme="dark"]');
+  await page.click('#settings button[value="close"]');
+  await page.clock.runFor(500);
+  await page.screenshot({ path: path.join(outDir, '6-nacht.png') });
   await page.setViewportSize({ width: 800, height: 1280 });
   await page.clock.runFor(500);
-  await page.screenshot({ path: path.join(outDir, 'trekker-gps-staand.png') });
+  await page.screenshot({ path: path.join(outDir, '7-staand.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.runFor(500);
+  await page.screenshot({ path: path.join(outDir, '8-gsm.png') });
+  check(errors.length === 0, 'geen JavaScript-fouten na nachtmodus' + (errors.length ? ': ' + errors.join('; ') : ''));
 
   await browser.close();
   server.close();

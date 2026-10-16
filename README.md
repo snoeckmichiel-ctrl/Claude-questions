@@ -109,7 +109,7 @@ Oudere Amatron-software verwacht soms `$GPGGA` in plaats van `$GNGGA`. De firmwa
 
 ## De Trekker-GPS app
 
-![De Trekker-GPS app met de demo-tractor](docs/app-demo.png)
+![De Trekker-GPS app tijdens het werk](docs/app-werken.png)
 
 De app zit in het geheugen van de ESP32. Er is niets te installeren, en ze werkt op elke tablet met een browser, Windows of Android.
 
@@ -125,6 +125,11 @@ De app zit in het geheugen van de ESP32. Er is niets te installeren, en ze werkt
 - **Werk AAN/UIT:** tekent de bewerkte stroken in de werkbreedte en houdt het rijspoor bij. Overlap wordt donkerder.
 - **ISOXML exporteren:** maakt een zip met de map `TASKDATA`. Pak uit en zet de map op de USB-stick voor de Amatron of je bedrijfssoftware.
 - **Demo:** een gesimuleerde tractor, om de app zonder GPS uit te proberen.
+- **Weergave:** dag, nacht of automatisch, voor werk in de zon of 's avonds.
+
+| Verbinden | Exporteren |
+|---|---|
+| ![Welkomstscherm](docs/app-welkom.png) | ![Export](docs/app-export.png) |
 
 Alles wordt bewaard in de tablet, ook als de pagina herlaadt. Exporteer toch na elk perceel. Gewiste browsergegevens zijn anders weg.
 
@@ -134,6 +139,23 @@ De app werkt ook zonder kastje:
 - **USB-kabel:** in Chrome of Edge op een Windows-tablet of computer. Kies dan "USB-kabel" bij Instellingen.
 
 Gebruik je liever een andere app, zoals AgOpenGPS? Zet dan `TABLET_BT_ENABLED` op 1 of gebruik de USB-kabel. Die kanalen sturen dezelfde NMEA-zinnen.
+
+## Productnaam en vermelding
+
+De productnaam, versie, bedrijfsnaam en vermeldingen staan samen in `app/src/brand.js`. Pas ze daar aan en bouw de app opnieuw. Ze verschijnen in de bovenbalk, bij Instellingen onder "Over" en in de ISOXML-bestanden.
+
+Deze app en firmware zijn ontwikkeld met hulp van Claude, een AI-assistent van Anthropic.
+
+## Op weg naar verkoop
+
+Voor je het product verkoopt, moeten deze punten nog geregeld worden:
+
+- **CE-markering:** een toestel met wifi valt onder de Europese richtlijn voor radioapparatuur. Sinds augustus 2025 horen daar ook cyberbeveiligingseisen bij.
+- **Wachtwoord per toestel:** een vast standaardwachtwoord zoals `trekker123` mag dan niet meer. Elk kastje heeft een eigen wachtwoord nodig, bijvoorbeeld op een sticker.
+- **Licenties:** de ESP32-software en de webserverbibliotheken gebruiken open-sourcelicenties zoals de LGPL. Laat nakijken wat dat betekent voor de verkoop van de firmware.
+- **Eigen licentie:** kies onder welke voorwaarden jullie eigen code verkocht of gedeeld wordt.
+- **Compatibiliteit:** test de ISOXML-export met de Amatron 3 en met de bedrijfssoftware van jullie klanten.
+- **Behuizing:** stof- en waterdicht, bestand tegen trillingen, met een stevige aansluiting op 12V.
 
 ## ISOXML-bestanden
 
@@ -191,7 +213,7 @@ De led op de ESP32 knippert bij elke positie en brandt continu bij een RTK-fix.
 
 ## Voor ontwikkelaars
 
-De app staat in `app/src`. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist/index.html` en `firmware/trekker_gps/web_app.h`:
+De app staat in `app/src`: `brand.js` voor naam en versie, `app.js` voor het scherm en losse modules voor NMEA, geometrie, ISOXML en ZIP. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist/index.html` en `firmware/trekker_gps/web_app.h`:
 
 ```
 python3 tools/build_web.py

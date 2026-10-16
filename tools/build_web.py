@@ -12,7 +12,7 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "app" / "src"
-ORDER = ["nmea.js", "geo.js", "isoxml.js", "zip.js", "demo.js", "app.js"]
+ORDER = ["brand.js", "nmea.js", "geo.js", "isoxml.js", "zip.js", "demo.js", "app.js"]
 
 
 def main() -> None:
