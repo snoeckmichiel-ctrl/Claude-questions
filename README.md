@@ -2,7 +2,7 @@
 
 Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelijk:
 
-- **De tablet** krijgt alle NMEA-zinnen via USB of Bluetooth. De tablet-app maakt daarmee de kaarten, perceelgrenzen en bestanden.
+- **De tablet** toont de eigen Trekker-GPS app via wifi. Die tekent de kaart, neemt perceelgrenzen op en exporteert ISOXML.
 - **De Amazone Amatron 3** krijgt GGA, VTG en GSA via RS232 aan 19200 baud, zoals de handleiding vraagt.
 
 ```
@@ -13,8 +13,8 @@ Een zelfbouw-GPS voor de tractor. Eén GPS-ontvanger voedt twee schermen tegelij
                  └────────┬────────┘
                           │ 3,3V seriëel, 115200 baud
                  ┌────────┴────────┐
- tablet ◄─USB/BT─┤      ESP32      ├──wifi──► NTRIP (RTK-correcties, optioneel)
- (RTCM terug) ──►│                 │
+ tablet ◄─wifi───┤      ESP32      ├──wifi──► NTRIP (RTK-correcties, optioneel)
+ (app in browser)│                 │
                  └────────┬────────┘
                           │ 3,3V
                  ┌────────┴────────┐
@@ -107,12 +107,33 @@ Volgens de handleiding MG4038 verwacht de Amatron 3:
 
 Oudere Amatron-software verwacht soms `$GPGGA` in plaats van `$GNGGA`. De firmware zet dat standaard om. Dat stel je in met `AMATRON_TALKER_GP` in `config.h`.
 
-## Tablet
+## De Trekker-GPS app
 
-De ESP32 stuurt alle NMEA-zinnen naar de tablet. De tablet-app maakt de bestanden.
+![De Trekker-GPS app met de demo-tractor](docs/app-demo.png)
 
-- **Windows-tablet met AgOpenGPS:** sluit aan met een USB-kabel. Kies in AgIO de juiste COM-poort aan 115200 baud. Bluetooth kan ook, dan verschijnt er een COM-poort voor "Trekker-GPS" na het koppelen.
-- **Android-tablet:** koppel "Trekker-GPS" via Bluetooth. Gebruik een app die een externe Bluetooth-GPS als locatie doorgeeft aan andere apps, zoals "Bluetooth GNSS".
+De app zit in het geheugen van de ESP32. Er is niets te installeren, en ze werkt op elke tablet met een browser, Windows of Android.
+
+1. Zet het GPS-kastje aan.
+2. Verbind de tablet met het wifinetwerk **Trekker-GPS**. Het standaardwachtwoord is `trekker123`. Verander het in `config.h`.
+3. Open `http://192.168.4.1` in Chrome. De app verbindt automatisch.
+4. Voeg de pagina toe aan het startscherm, dan opent ze als een gewone app.
+
+**Werken met de app:**
+
+- **Instellingen:** naam van het perceel, klant, bedrijf en werkbreedte.
+- **Grens opnemen:** rij rond het perceel en druk op "Grens stoppen". De app toont de oppervlakte.
+- **Werk AAN/UIT:** tekent de bewerkte stroken in de werkbreedte en houdt het rijspoor bij. Overlap wordt donkerder.
+- **ISOXML exporteren:** maakt een zip met de map `TASKDATA`. Pak uit en zet de map op de USB-stick voor de Amatron of je bedrijfssoftware.
+- **Demo:** een gesimuleerde tractor, om de app zonder GPS uit te proberen.
+
+Alles wordt bewaard in de tablet, ook als de pagina herlaadt. Exporteer toch na elk perceel. Gewiste browsergegevens zijn anders weg.
+
+De app werkt ook zonder kastje:
+
+- **Demo:** open `app/dist/index.html` op een computer en kies Demo bij Instellingen.
+- **USB-kabel:** in Chrome of Edge op een Windows-tablet of computer. Kies dan "USB-kabel" bij Instellingen.
+
+Gebruik je liever een andere app, zoals AgOpenGPS? Zet dan `TABLET_BT_ENABLED` op 1 of gebruik de USB-kabel. Die kanalen sturen dezelfde NMEA-zinnen.
 
 ## ISOXML-bestanden
 
@@ -129,9 +150,16 @@ De Amatron 3 heeft standaard een Task Controller voor taakbeheer in ISO-XML. Zod
 
 Optionele licenties breiden dit uit. GPS-Switch zorgt voor automatische sectieschakeling. GPS-Maps leest taakkaarten in shapefile-formaat.
 
-### Op de tablet
+### Met de Trekker-GPS app
 
-Dat hangt af van de app. Niet elke tablet-app kan ISOXML schrijven. AgOpenGPS werkt vooral met eigen bestanden en KML.
+De app maakt een ISOXML-taak in versie 3. Versie 3 is de versie die oudere terminals zoals de Amatron 3 lezen. De export bevat:
+
+| Bestand | Inhoud |
+|---|---|
+| `TASKDATA.XML` | klant, bedrijf, perceel met grens en de taak |
+| `TLG00001.XML` en `TLG00001.BIN` | het rijspoor met tijd, positie en GPS-kwaliteit, één punt per seconde |
+
+Machinegegevens zoals hoeveelheden of de werkstand zitten er nog niet in. Daarvoor is een apparaatbeschrijving nodig, en dat is een volgende stap.
 
 ## RTK-correcties
 
@@ -154,20 +182,34 @@ Mogelijke correctiediensten:
 2. Open `firmware/trekker_gps/trekker_gps.ino`.
 3. Pas `firmware/trekker_gps/config.h` aan.
 4. Kies het bord "ESP32 Dev Module" en de juiste poort.
-5. Klik op uploaden.
+5. Installeer via Bibliotheken beheren: **ESPAsyncWebServer** en **AsyncTCP**, allebei van ESP32Async.
+6. Klik op uploaden.
 
 Zonder tablet kan je testen met `DEBUG_OUTPUT` op 1. Open de seriële monitor aan 115200 baud. Elke 5 seconden verschijnt dan een regel met het aantal posities per seconde, de fix-kwaliteit en hoeveel zinnen naar de Amatron gingen. Zet de optie terug op 0 voor gebruik met de tablet.
 
 De led op de ESP32 knippert bij elke positie en brandt continu bij een RTK-fix.
 
-## NMEA-logica testen op de computer
+## Voor ontwikkelaars
+
+De app staat in `app/src`. Na een wijziging bouw je ze opnieuw. Dat maakt `app/dist/index.html` en `firmware/trekker_gps/web_app.h`:
+
+```
+python3 tools/build_web.py
+```
+
+Tests:
 
 ```
 g++ -std=c++17 -Wall -Wextra -I firmware/trekker_gps test/test_nmea.cpp -o test_nmea && ./test_nmea
+node --test test/app.test.js
+NODE_PATH=$(npm root -g) node test/e2e_demo.cjs
 ```
+
+De laatste test rijdt met de demo-tractor door de app in een echte browser en controleert de ISOXML-export. Daarvoor is Playwright nodig.
 
 ## Nog na te kijken op de echte hardware
 
 - De pinnen van de seriële aansluiting op jouw Amatron 3-kabel.
 - Of je Amatron-versie `$GNGGA` aanvaardt of `$GPGGA` nodig heeft.
+- Of de Amatron 3 of je bedrijfssoftware de ISOXML-export van de app zonder fouten inleest.
 - De LC29H-instelcommando's (`PAIR050` en `PAIR062`). Ze volgen de Quectel-documentatie, maar zijn nog niet op een echte module getest.

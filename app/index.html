@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1f6f43">
+<title>Trekker-GPS</title>
+<style>
+:root {
+  --bg: #f4f5f2; --panel: #ffffff; --text: #1b1f1c; --muted: #5c655f; --line: #d6dbd5;
+  --map: #e9ede6; --grid: #d3d9cf; --accent: #1f6f43; --accent-text: #ffffff;
+  --work: #d9480f; --boundary: #2b8a3e; --cover: rgba(240, 140, 0, 0.42);
+  --ok: #2b8a3e; --warn: #e8a400; --bad: #c92a2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
+    --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
+    --cover: rgba(255, 160, 40, 0.38);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
+  --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
+  --cover: rgba(255, 160, 40, 0.38);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+  -webkit-user-select: none; user-select: none; }
+#app { display: grid; height: 100%; grid-template-rows: auto 1fr; grid-template-columns: 1fr 260px;
+  grid-template-areas: "status status" "map panel"; }
+@media (orientation: portrait), (max-width: 700px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto;
+    grid-template-areas: "status" "map" "panel"; }
+}
+#status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
+.pill { padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill b { font-weight: 600; }
+.pill.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.pill.warn { background: var(--warn); color: #1b1f1c; border-color: var(--warn); }
+.pill.bad { background: var(--bad); color: #fff; border-color: var(--bad); }
+#speed { margin-left: auto; font-size: 1.25rem; }
+#mapWrap { grid-area: map; position: relative; min-height: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#mapButtons { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+#mapButtons button { width: 52px; height: 52px; font-size: 1.5rem; padding: 0; }
+#panel { grid-area: panel; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+@media (orientation: portrait), (max-width: 700px) {
+  #panel { border-left: 0; border-top: 1px solid var(--line); display: grid;
+    grid-template-columns: 1fr 1fr; padding: 10px 16px; }
+  #panel .info { grid-column: 1 / -1; }
+}
+button { font: inherit; font-weight: 600; min-height: 56px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer;
+  touch-action: manipulation; }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.on { background: var(--work); color: #fff; border-color: var(--work); }
+button.rec { background: var(--boundary); color: #fff; border-color: var(--boundary); }
+button:disabled { opacity: 0.45; }
+.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 8px 2px;
+  font-variant-numeric: tabular-nums; }
+.info span:nth-child(odd) { color: var(--muted); }
+.info span:nth-child(even) { text-align: right; font-weight: 600; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text);
+  padding: 0; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog form { padding: 16px; display: grid; gap: 12px; }
+dialog h2 { margin: 0; font-size: 1.2rem; }
+dialog h3 { margin: 8px 0 0; font-size: 1rem; color: var(--muted); }
+label { display: grid; gap: 4px; color: var(--muted); }
+input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px; min-height: 48px; width: 100%; -webkit-user-select: text; user-select: text; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text);
+  color: var(--bg); padding: 12px 18px; border-radius: 10px; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="status">
+    <span class="pill" id="conn">Niet verbonden</span>
+    <span class="pill bad" id="fix">Geen fix</span>
+    <span class="pill" id="sats">Sat <b>-</b></span>
+    <span class="pill" id="hdop">HDOP <b>-</b></span>
+    <span class="pill" id="speed"><b>-</b> km/u</span>
+  </header>
+  <div id="mapWrap">
+    <canvas id="map"></canvas>
+    <div id="mapButtons">
+      <button id="zoomIn" title="Inzoomen" aria-label="Inzoomen">+</button>
+      <button id="zoomOut" title="Uitzoomen" aria-label="Uitzoomen">&minus;</button>
+      <button id="center" title="Volg tractor" aria-label="Volg tractor">&#9678;</button>
+    </div>
+  </div>
+  <aside id="panel">
+    <button id="btnBoundary">Grens opnemen</button>
+    <button id="btnWork">Werk AAN</button>
+    <button id="btnExport" class="primary">ISOXML exporteren</button>
+    <button id="btnSettings">Instellingen</button>
+    <div class="info">
+      <span>Perceel</span><span id="fieldName">-</span>
+      <span>Oppervlakte</span><span id="areaField">-</span>
+      <span>Bewerkt</span><span id="areaWorked">-</span>
+      <span>Werkbreedte</span><span id="widthInfo">-</span>
+    </div>
+  </aside>
+</div>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>Instellingen</h2>
+    <label>Naam perceel <input id="setField" autocomplete="off"></label>
+    <div class="row">
+      <label>Klant <input id="setCustomer" autocomplete="off"></label>
+      <label>Bedrijf <input id="setFarm" autocomplete="off"></label>
+    </div>
+    <label>Werkbreedte (m) <input id="setWidth" type="number" min="0.5" max="60" step="0.1" inputmode="decimal"></label>
+    <h3>GPS-verbinding</h3>
+    <label>Adres van het GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
+    <div class="row">
+      <button type="button" id="connWifi">Wifi</button>
+      <button type="button" id="connUsb">USB-kabel</button>
+      <button type="button" id="connDemo">Demo</button>
+    </div>
+    <h3>Perceel</h3>
+    <div class="row">
+      <button type="button" id="clearBoundary">Grens wissen</button>
+      <button type="button" id="newField">Nieuw perceel</button>
+    </div>
+    <button value="close" class="primary">Sluiten</button>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<!-- SCRIPTS -->
+</body>
+</html>

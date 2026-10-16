@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1f6f43">
+<title>Trekker-GPS</title>
+<style>
+:root {
+  --bg: #f4f5f2; --panel: #ffffff; --text: #1b1f1c; --muted: #5c655f; --line: #d6dbd5;
+  --map: #e9ede6; --grid: #d3d9cf; --accent: #1f6f43; --accent-text: #ffffff;
+  --work: #d9480f; --boundary: #2b8a3e; --cover: rgba(240, 140, 0, 0.42);
+  --ok: #2b8a3e; --warn: #e8a400; --bad: #c92a2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
+    --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
+    --cover: rgba(255, 160, 40, 0.38);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111412; --panel: #1b201d; --text: #eef1ee; --muted: #9aa49d; --line: #2e3631;
+  --map: #161b18; --grid: #26302a; --accent: #40c057; --accent-text: #0b1a10;
+  --cover: rgba(255, 160, 40, 0.38);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+  -webkit-user-select: none; user-select: none; }
+#app { display: grid; height: 100%; grid-template-rows: auto 1fr; grid-template-columns: 1fr 260px;
+  grid-template-areas: "status status" "map panel"; }
+@media (orientation: portrait), (max-width: 700px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto;
+    grid-template-areas: "status" "map" "panel"; }
+}
+#status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
+.pill { padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill b { font-weight: 600; }
+.pill.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.pill.warn { background: var(--warn); color: #1b1f1c; border-color: var(--warn); }
+.pill.bad { background: var(--bad); color: #fff; border-color: var(--bad); }
+#speed { margin-left: auto; font-size: 1.25rem; }
+#mapWrap { grid-area: map; position: relative; min-height: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#mapButtons { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+#mapButtons button { width: 52px; height: 52px; font-size: 1.5rem; padding: 0; }
+#panel { grid-area: panel; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+@media (orientation: portrait), (max-width: 700px) {
+  #panel { border-left: 0; border-top: 1px solid var(--line); display: grid;
+    grid-template-columns: 1fr 1fr; padding: 10px 16px; }
+  #panel .info { grid-column: 1 / -1; }
+}
+button { font: inherit; font-weight: 600; min-height: 56px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer;
+  touch-action: manipulation; }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.on { background: var(--work); color: #fff; border-color: var(--work); }
+button.rec { background: var(--boundary); color: #fff; border-color: var(--boundary); }
+button:disabled { opacity: 0.45; }
+.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 8px 2px;
+  font-variant-numeric: tabular-nums; }
+.info span:nth-child(odd) { color: var(--muted); }
+.info span:nth-child(even) { text-align: right; font-weight: 600; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text);
+  padding: 0; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog form { padding: 16px; display: grid; gap: 12px; }
+dialog h2 { margin: 0; font-size: 1.2rem; }
+dialog h3 { margin: 8px 0 0; font-size: 1rem; color: var(--muted); }
+label { display: grid; gap: 4px; color: var(--muted); }
+input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px; min-height: 48px; width: 100%; -webkit-user-select: text; user-select: text; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text);
+  color: var(--bg); padding: 12px 18px; border-radius: 10px; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="status">
+    <span class="pill" id="conn">Niet verbonden</span>
+    <span class="pill bad" id="fix">Geen fix</span>
+    <span class="pill" id="sats">Sat <b>-</b></span>
+    <span class="pill" id="hdop">HDOP <b>-</b></span>
+    <span class="pill" id="speed"><b>-</b> km/u</span>
+  </header>
+  <div id="mapWrap">
+    <canvas id="map"></canvas>
+    <div id="mapButtons">
+      <button id="zoomIn" title="Inzoomen" aria-label="Inzoomen">+</button>
+      <button id="zoomOut" title="Uitzoomen" aria-label="Uitzoomen">&minus;</button>
+      <button id="center" title="Volg tractor" aria-label="Volg tractor">&#9678;</button>
+    </div>
+  </div>
+  <aside id="panel">
+    <button id="btnBoundary">Grens opnemen</button>
+    <button id="btnWork">Werk AAN</button>
+    <button id="btnExport" class="primary">ISOXML exporteren</button>
+    <button id="btnSettings">Instellingen</button>
+    <div class="info">
+      <span>Perceel</span><span id="fieldName">-</span>
+      <span>Oppervlakte</span><span id="areaField">-</span>
+      <span>Bewerkt</span><span id="areaWorked">-</span>
+      <span>Werkbreedte</span><span id="widthInfo">-</span>
+    </div>
+  </aside>
+</div>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>Instellingen</h2>
+    <label>Naam perceel <input id="setField" autocomplete="off"></label>
+    <div class="row">
+      <label>Klant <input id="setCustomer" autocomplete="off"></label>
+      <label>Bedrijf <input id="setFarm" autocomplete="off"></label>
+    </div>
+    <label>Werkbreedte (m) <input id="setWidth" type="number" min="0.5" max="60" step="0.1" inputmode="decimal"></label>
+    <h3>GPS-verbinding</h3>
+    <label>Adres van het GPS-kastje <input id="setHost" autocomplete="off" placeholder="192.168.4.1"></label>
+    <div class="row">
+      <button type="button" id="connWifi">Wifi</button>
+      <button type="button" id="connUsb">USB-kabel</button>
+      <button type="button" id="connDemo">Demo</button>
+    </div>
+    <h3>Perceel</h3>
+    <div class="row">
+      <button type="button" id="clearBoundary">Grens wissen</button>
+      <button type="button" id="newField">Nieuw perceel</button>
+    </div>
+    <button value="close" class="primary">Sluiten</button>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+// nmea.js - NMEA 0183 lezen: GGA, VTG, RMC en ZDA.
+(function (root) {
+  'use strict';
+
+  function checksumOk(line) {
+    if (!line || line[0] !== '$') return false;
+    const star = line.lastIndexOf('*');
+    if (star < 0 || star + 3 !== line.length) return false;
+    let cs = 0;
+    for (let i = 1; i < star; i++) cs ^= line.charCodeAt(i);
+    return cs === parseInt(line.slice(star + 1), 16);
+  }
+
+  function withChecksum(body) {
+    let cs = 0;
+    for (let i = 0; i < body.length; i++) cs ^= body.charCodeAt(i);
+    return '$' + body + '*' + cs.toString(16).toUpperCase().padStart(2, '0');
+  }
+
+  // "5106.1234" + "N" -> graden als kommagetal
+  function parseLatLon(value, hemi) {
+    if (!value) return null;
+    const dot = value.indexOf('.');
+    const degLen = (dot < 0 ? value.length : dot) - 2;
+    if (degLen < 1) return null;
+    const deg = parseInt(value.slice(0, degLen), 10);
+    const min = parseFloat(value.slice(degLen));
+    if (isNaN(deg) || isNaN(min)) return null;
+    const d = deg + min / 60;
+    return hemi === 'S' || hemi === 'W' ? -d : d;
+  }
+
+  // "123519.50" -> milliseconden sinds middernacht UTC
+  function parseTime(value) {
+    if (!value || value.length < 6) return null;
+    const h = +value.slice(0, 2), m = +value.slice(2, 4), s = parseFloat(value.slice(4));
+    if (isNaN(h) || isNaN(m) || isNaN(s)) return null;
+    return Math.round(((h * 60 + m) * 60 + s) * 1000);
+  }
+
+  function num(v) {
+    if (v === undefined || v === '') return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+
+  function parseSentence(line) {
+    if (!checksumOk(line)) return null;
+    const f = line.slice(1, line.lastIndexOf('*')).split(',');
+    const type = f[0].slice(2);
+    switch (type) {
+      case 'GGA':
+        return {
+          type, timeUtc: parseTime(f[1]),
+          lat: parseLatLon(f[2], f[3]), lon: parseLatLon(f[4], f[5]),
+          quality: f[6] === '' ? 0 : parseInt(f[6], 10),
+          sats: num(f[7]), hdop: num(f[8]), alt: num(f[9]),
+        };
+      case 'VTG':
+        return { type, course: num(f[1]), speedKmh: num(f[7]) };
+      case 'RMC': {
+        const knots = num(f[7]);
+        const d = f[9];
+        return {
+          type, timeUtc: parseTime(f[1]), valid: f[2] === 'A',
+          lat: parseLatLon(f[3], f[4]), lon: parseLatLon(f[5], f[6]),
+          speedKmh: knots === null ? null : knots * 1.852, course: num(f[8]),
+          date: d && d.length === 6 ? '20' + d.slice(4, 6) + '-' + d.slice(2, 4) + '-' + d.slice(0, 2) : null,
+        };
+      }
+      case 'ZDA':
+        return {
+          type, timeUtc: parseTime(f[1]),
+          date: f[4] && f[3] && f[2] ? f[4] + '-' + f[3].padStart(2, '0') + '-' + f[2].padStart(2, '0') : null,
+        };
+      default:
+        return { type };
+    }
+  }
+
+  // Houdt de laatste toestand bij. onPosition wordt opgeroepen bij elke GGA met fix.
+  class NmeaParser {
+    constructor(onPosition) {
+      this.onPosition = onPosition || function () {};
+      this.buffer = '';
+      this.badLines = 0;
+      this.state = {
+        lat: null, lon: null, alt: null, quality: 0, sats: null, hdop: null,
+        speedKmh: null, course: null, timeUtc: null, date: null,
+      };
+    }
+
+    feed(text) {
+      this.buffer += text;
+      let nl;
+      while ((nl = this.buffer.search(/[\r\n]/)) >= 0) {
+        const line = this.buffer.slice(0, nl).trim();
+        this.buffer = this.buffer.slice(nl + 1);
+        if (line) this.handleLine(line);
+      }
+      if (this.buffer.length > 512) this.buffer = '';  // rommel zonder regeleinde
+    }
+
+    handleLine(line) {
+      const start = line.indexOf('$');
+      if (start < 0) return;
+      const s = parseSentence(line.slice(start));
+      if (!s) { this.badLines++; return; }
+      const st = this.state;
+      if (s.type === 'GGA') {
+        st.quality = s.quality;
+        st.sats = s.sats;
+        st.hdop = s.hdop;
+        if (s.timeUtc !== null) st.timeUtc = s.timeUtc;
+        if (s.quality > 0 && s.lat !== null && s.lon !== null) {
+          st.lat = s.lat; st.lon = s.lon; st.alt = s.alt;
+          this.onPosition(Object.assign({}, st));
+        }
+      } else if (s.type === 'VTG') {
+        if (s.speedKmh !== null) st.speedKmh = s.speedKmh;
+        if (s.course !== null) st.course = s.course;
+      } else if (s.type === 'RMC') {
+        if (s.date) st.date = s.date;
+        if (s.speedKmh !== null) st.speedKmh = s.speedKmh;
+        if (s.course !== null) st.course = s.course;
+      } else if (s.type === 'ZDA') {
+        if (s.date) st.date = s.date;
+      }
+    }
+  }
+
+  const QUALITY_NAMES = ['Geen fix', 'GPS', 'DGPS', 'PPS', 'RTK fix', 'RTK float', 'Geschat', 'Manueel', 'Simulatie'];
+
+  const api = { checksumOk, withChecksum, parseLatLon, parseTime, parseSentence, NmeaParser, QUALITY_NAMES };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { nmea: api });
+})(this);
+</script>
+<script>
+// geo.js - omrekenen tussen GPS-coördinaten en meters op het perceel.
+(function (root) {
+  'use strict';
+  const R = 6378137;  // straal van de aarde (WGS84), in meter
+  const RAD = Math.PI / 180;
+
+  // Vlak assenstelsel rond een vast punt. Nauwkeurig genoeg binnen enkele km.
+  class LocalFrame {
+    constructor(lat0, lon0) {
+      this.lat0 = lat0;
+      this.lon0 = lon0;
+      this.kx = R * RAD * Math.cos(lat0 * RAD);
+      this.ky = R * RAD;
+    }
+    toXY(lat, lon) { return { x: (lon - this.lon0) * this.kx, y: (lat - this.lat0) * this.ky }; }
+    toLatLon(x, y) { return { lat: this.lat0 + y / this.ky, lon: this.lon0 + x / this.kx }; }
+  }
+
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  // Oppervlakte van een veelhoek in m² (formule van Gauss).
+  function polygonArea(pts) {
+    let s = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      s += p.x * q.y - q.x * p.y;
+    }
+    return Math.abs(s) / 2;
+  }
+
+  // Oppervlakte rechtstreeks uit GPS-punten [{lat, lon}].
+  function areaLatLon(points) {
+    if (points.length < 3) return 0;
+    const f = new LocalFrame(points[0].lat, points[0].lon);
+    return polygonArea(points.map(p => f.toXY(p.lat, p.lon)));
+  }
+
+  const api = { LocalFrame, distance, polygonArea, areaLatLon };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { geo: api });
+})(this);
+</script>
+<script>
+// isoxml.js - maakt een ISOXML-taak (ISO 11783-10, versie 3) voor een Task Controller.
+//
+// Resultaat: de map TASKDATA met
+//   TASKDATA.XML   klant, bedrijf, perceel met grens en taak
+//   TLG00001.XML   beschrijving van het rijspoor (alleen als er een spoor is)
+//   TLG00001.BIN   rijspoor: tijd, positie en GPS-kwaliteit per punt
+(function (root) {
+  'use strict';
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  }
+
+  function pad(n, w) { return String(n).padStart(w || 2, '0'); }
+
+  // Lokale tijd zonder tijdzone, zoals ISOXML dat verwacht: 2026-10-16T14:05:09
+  function isoLocal(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function coord(v) { return v.toFixed(9); }
+
+  // Dagen sinds 1980-01-01 en milliseconden sinds middernacht, in lokale tijd.
+  function tlgTime(ms) {
+    const d = new Date(ms);
+    const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const dayUtc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return {
+      msOfDay: ms - midnight,
+      days: Math.round((dayUtc - Date.UTC(1980, 0, 1)) / 86400000),
+    };
+  }
+
+  // GGA-kwaliteit naar ISOXML PositionStatus. 0..8 komen overeen.
+  function positionStatus(q) {
+    return Number.isInteger(q) && q >= 0 && q <= 8 ? q : 15;  // 15 = niet beschikbaar
+  }
+
+  // Elk record: tijd (4+2 bytes), noord (4), oost (4), status (1), aantal DLV's (1) = 16 bytes.
+  const TLG_RECORD_SIZE = 16;
+  const TLG_HEADER_XML =
+    '<?xml version="1.0" encoding="UTF-8"?>\r\n' +
+    '<TIM A="" D="4">\r\n<PTN A="" B="" D=""/>\r\n</TIM>\r\n';
+
+  function buildTimeLogBin(log) {
+    const buf = new ArrayBuffer(log.length * TLG_RECORD_SIZE);
+    const v = new DataView(buf);
+    log.forEach((p, i) => {
+      const o = i * TLG_RECORD_SIZE;
+      const t = tlgTime(p.t);
+      v.setUint32(o, t.msOfDay, true);
+      v.setUint16(o + 4, t.days, true);
+      v.setInt32(o + 6, Math.round(p.lat * 1e7), true);
+      v.setInt32(o + 10, Math.round(p.lon * 1e7), true);
+      v.setUint8(o + 14, positionStatus(p.quality));
+      v.setUint8(o + 15, 0);  // geen machinegegevens (DLV)
+    });
+    return new Uint8Array(buf);
+  }
+
+  function ringToXml(points) {
+    const ring = points.slice();
+    const a = ring[0], b = ring[ring.length - 1];
+    if (a.lat !== b.lat || a.lon !== b.lon) ring.push(a);  // veelhoek sluiten
+    return ring.map(p => '<PNT A="2" C="' + coord(p.lat) + '" D="' + coord(p.lon) + '"/>').join('\r\n');
+  }
+
+  /**
+   * opts = {
+   *   customer, farm, field, taskName,     teksten (mogen leeg zijn, behalve field)
+   *   boundary: [{lat, lon}],              perceelgrens, minstens 3 punten of leeg
+   *   areaM2,                              oppervlakte van het perceel
+   *   log: [{t, lat, lon, quality}],       rijspoor tijdens het werk, t = ms sinds 1970
+   *   software, version
+   * }
+   * Geeft { "TASKDATA/TASKDATA.XML": string, ... } terug.
+   */
+  function buildTaskData(opts) {
+    const o = Object.assign({ customer: '', farm: '', field: 'Perceel', boundary: [], log: [],
+      areaM2: 0, software: 'Trekker-GPS', version: '0.1' }, opts);
+    const files = {};
+    const lines = [];
+    lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+    lines.push('<ISO11783_TaskData VersionMajor="3" VersionMinor="3" ManagementSoftwareManufacturer="' +
+      esc(o.software) + '" ManagementSoftwareVersion="' + esc(o.version) + '" DataTransferOrigin="1">');
+
+    let ctrRef = '', frmRef = '';
+    if (o.customer) {
+      lines.push('<CTR A="CTR1" B="' + esc(o.customer) + '"/>');
+      ctrRef = 'CTR1';
+    }
+    if (o.farm) {
+      lines.push('<FRM A="FRM1" B="' + esc(o.farm) + '"' + (ctrRef ? ' I="CTR1"' : '') + '/>');
+      frmRef = 'FRM1';
+    }
+
+    const fieldName = o.field || 'Perceel';
+    lines.push('<PFD A="PFD1" C="' + esc(fieldName) + '" D="' + Math.round(o.areaM2 || 0) + '"' +
+      (ctrRef ? ' E="CTR1"' : '') + (frmRef ? ' F="FRM1"' : '') + '>');
+    if (o.boundary && o.boundary.length >= 3) {
+      lines.push('<PLN A="1">', '<LSG A="1">', ringToXml(o.boundary), '</LSG>', '</PLN>');
+    }
+    lines.push('</PFD>');
+
+    const hasLog = o.log && o.log.length > 0;
+    const taskName = o.taskName || fieldName;
+    lines.push('<TSK A="TSK1" B="' + esc(taskName) + '"' + (ctrRef ? ' C="CTR1"' : '') +
+      (frmRef ? ' D="FRM1"' : '') + ' E="PFD1" G="' + (hasLog ? 4 : 1) + '">');
+    if (hasLog) {
+      const start = o.log[0].t, stop = o.log[o.log.length - 1].t;
+      lines.push('<TIM A="' + isoLocal(start) + '" B="' + isoLocal(stop) + '" D="4"/>');
+      lines.push('<TLG A="TLG00001"/>');
+      files['TASKDATA/TLG00001.XML'] = TLG_HEADER_XML;
+      files['TASKDATA/TLG00001.BIN'] = buildTimeLogBin(o.log);
+    }
+    lines.push('</TSK>');
+    lines.push('</ISO11783_TaskData>');
+
+    files['TASKDATA/TASKDATA.XML'] = lines.join('\r\n') + '\r\n';
+    return files;
+  }
+
+  const api = { buildTaskData, buildTimeLogBin, tlgTime, isoLocal, esc, TLG_RECORD_SIZE };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { isoxml: api });
+})(this);
+</script>
+<script>
+// zip.js - eenvoudige ZIP-maker zonder compressie, werkt zonder internet.
+(function (root) {
+  'use strict';
+
+  let crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function toBytes(data) {
+    if (data instanceof Uint8Array) return data;
+    return new TextEncoder().encode(String(data));
+  }
+
+  // files: { "map/naam.ext": string | Uint8Array }  ->  Uint8Array met het ZIP-bestand
+  function makeZip(files, date) {
+    const d = date || new Date();
+    const dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    const locals = [], centrals = [];
+    let offset = 0;
+
+    for (const name of Object.keys(files)) {
+      const nameBytes = new TextEncoder().encode(name);
+      const data = toBytes(files[name]);
+      const crc = crc32(data);
+
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true);
+      local.setUint16(4, 20, true);       // versie nodig om uit te pakken
+      local.setUint16(6, 0x0800, true);   // UTF-8-namen
+      local.setUint16(8, 0, true);        // geen compressie
+      local.setUint16(10, dosTime, true);
+      local.setUint16(12, dosDate, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, data.length, true);
+      local.setUint32(22, data.length, true);
+      local.setUint16(26, nameBytes.length, true);
+      local.setUint16(28, 0, true);
+      locals.push(new Uint8Array(local.buffer), nameBytes, data);
+
+      const central = new DataView(new ArrayBuffer(46));
+      central.setUint32(0, 0x02014b50, true);
+      central.setUint16(4, 20, true);
+      central.setUint16(6, 20, true);
+      central.setUint16(8, 0x0800, true);
+      central.setUint16(10, 0, true);
+      central.setUint16(12, dosTime, true);
+      central.setUint16(14, dosDate, true);
+      central.setUint32(16, crc, true);
+      central.setUint32(20, data.length, true);
+      central.setUint32(24, data.length, true);
+      central.setUint16(28, nameBytes.length, true);
+      central.setUint32(42, offset, true);
+      centrals.push(new Uint8Array(central.buffer), nameBytes);
+
+      offset += 30 + nameBytes.length + data.length;
+    }
+
+    const centralSize = centrals.reduce((s, a) => s + a.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, Object.keys(files).length, true);
+    end.setUint16(10, Object.keys(files).length, true);
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true);
+
+    const parts = locals.concat(centrals, [new Uint8Array(end.buffer)]);
+    const out = new Uint8Array(parts.reduce((s, a) => s + a.length, 0));
+    let pos = 0;
+    for (const p of parts) { out.set(p, pos); pos += p.length; }
+    return out;
+  }
+
+  const api = { crc32, makeZip };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { zip: api });
+})(this);
+</script>
+<script>
+// demo.js - simuleert een tractor die een perceel heen en weer afrijdt.
+// Maakt echte NMEA-zinnen, zodat de hele app getest wordt zoals met een GPS.
+(function (root) {
+  'use strict';
+  const geo = root.TG ? root.TG.geo : require('./geo.js');
+  const nmea = root.TG ? root.TG.nmea : require('./nmea.js');
+
+  function fmtLat(lat) {
+    const a = Math.abs(lat), d = Math.floor(a), m = (a - d) * 60;
+    return String(d).padStart(2, '0') + m.toFixed(7).padStart(10, '0') + ',' + (lat >= 0 ? 'N' : 'S');
+  }
+  function fmtLon(lon) {
+    const a = Math.abs(lon), d = Math.floor(a), m = (a - d) * 60;
+    return String(d).padStart(3, '0') + m.toFixed(7).padStart(10, '0') + ',' + (lon >= 0 ? 'E' : 'W');
+  }
+  function fmtTime(date) {
+    const p = n => String(n).padStart(2, '0');
+    return p(date.getUTCHours()) + p(date.getUTCMinutes()) + p(date.getUTCSeconds()) + '.' +
+      String(Math.floor(date.getUTCMilliseconds() / 10)).padStart(2, '0');
+  }
+
+  // Route: eerst rond het perceel, dan banen van 'width' meter breed.
+  function buildRoute(lengthM, widthM, workWidth) {
+    const pts = [{ x: 0, y: 0 }, { x: lengthM, y: 0 }, { x: lengthM, y: widthM }, { x: 0, y: widthM }, { x: 0, y: 0 }];
+    let y = workWidth / 2, dir = 1;
+    while (y < widthM) {
+      const x0 = dir > 0 ? 0 : lengthM, x1 = dir > 0 ? lengthM : 0;
+      pts.push({ x: x0, y }, { x: x1, y });
+      y += workWidth;
+      dir = -dir;
+    }
+    return pts;
+  }
+
+  class DemoTractor {
+    constructor(onText, options) {
+      const o = Object.assign({ lat: 51.0543, lon: 3.7174, length: 200, width: 120,
+        workWidth: 12, speedKmh: 12, hz: 5, quality: 4 }, options);
+      this.o = o;
+      this.onText = onText;
+      this.frame = new geo.LocalFrame(o.lat, o.lon);
+      this.route = buildRoute(o.length, o.width, o.workWidth);
+      this.seg = 0;
+      this.pos = Object.assign({}, this.route[0]);
+      this.timer = null;
+    }
+
+    start() {
+      if (this.timer) return;
+      this.timer = setInterval(() => this.step(1 / this.o.hz), 1000 / this.o.hz);
+    }
+
+    stop() { clearInterval(this.timer); this.timer = null; }
+
+    // Eén meting verder rijden en de NMEA-zinnen uitsturen.
+    step(dt) {
+      let move = (this.o.speedKmh / 3.6) * dt;
+      let heading = 0;
+      while (move > 0) {
+        const target = this.route[(this.seg + 1) % this.route.length];
+        const dx = target.x - this.pos.x, dy = target.y - this.pos.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1e-9) heading = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+        if (dist <= move) {
+          this.pos = Object.assign({}, target);
+          move -= dist;
+          this.seg = (this.seg + 1) % this.route.length;
+        } else {
+          this.pos.x += dx / dist * move;
+          this.pos.y += dy / dist * move;
+          move = 0;
+        }
+      }
+      this.heading = heading;
+      const ll = this.frame.toLatLon(this.pos.x, this.pos.y);
+      const now = new Date();
+      const t = fmtTime(now);
+      const knots = this.o.speedKmh / 1.852;
+      const p = n => String(n).padStart(2, '0');
+      const date = p(now.getUTCDate()) + p(now.getUTCMonth() + 1) + p(now.getUTCFullYear() % 100);
+      const lines = [
+        nmea.withChecksum('GNRMC,' + t + ',A,' + fmtLat(ll.lat) + ',' + fmtLon(ll.lon) + ',' +
+          knots.toFixed(2) + ',' + heading.toFixed(1) + ',' + date + ',,,R,V'),
+        nmea.withChecksum('GNGGA,' + t + ',' + fmtLat(ll.lat) + ',' + fmtLon(ll.lon) + ',' +
+          this.o.quality + ',22,0.6,15.0,M,46.0,M,1.0,0000'),
+        nmea.withChecksum('GNVTG,' + heading.toFixed(1) + ',T,,M,' + knots.toFixed(2) + ',N,' +
+          this.o.speedKmh.toFixed(2) + ',K,R'),
+      ];
+      this.onText(lines.join('\r\n') + '\r\n');
+      return ll;
+    }
+  }
+
+  const api = { DemoTractor, buildRoute, fmtLat, fmtLon };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TG = Object.assign(root.TG || {}, { demo: api });
+})(this);
+</script>
+<script>
+// app.js - het scherm: kaart, knoppen, verbinding met het GPS-kastje en opslaan.
+(function () {
+  'use strict';
+  const { nmea, geo, isoxml, zip, demo } = window.TG;
+  const STORE_KEY = 'trekkergps.v1';
+  const $ = id => document.getElementById(id);
+
+  // ---------------------------------------------------------------- toestand
+  const settings = { field: 'Perceel 1', customer: '', farm: '', workWidth: 12, host: '', connection: '' };
+
+  function newField() {
+    return { origin: null, boundary: [], runs: [], log: [], workedM2: 0 };
+  }
+
+  let field = newField();
+  let frame = null;                       // omrekening GPS naar meters
+  let cache = { boundary: [], runs: [] }; // dezelfde punten in meters
+  let recordingBoundary = false;
+  let working = false;
+  let last = null;                        // laatste positie
+  let heading = 0;
+  let lastLogT = 0;
+  let lastDataAt = 0;
+  let dirty = false;
+  const view = { scale: 3, cx: 0, cy: 0, follow: true };
+
+  const parser = new nmea.NmeaParser(onPosition);
+
+  // ---------------------------------------------------------------- opslaan
+  function save() {
+    if (!dirty) return;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ settings, field }));
+      dirty = false;
+    } catch (e) {
+      toast('Opslaan in de tablet lukt niet. Exporteer het perceel.');
+    }
+  }
+
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (data && data.settings) Object.assign(settings, data.settings);
+      if (data && data.field) field = Object.assign(newField(), data.field);
+    } catch (e) { /* niets opgeslagen of geen toegang */ }
+    if (field.origin) setFrame(field.origin.lat, field.origin.lon);
+  }
+
+  function setFrame(lat, lon) {
+    frame = new geo.LocalFrame(lat, lon);
+    field.origin = { lat, lon };
+    cache.boundary = field.boundary.map(p => frame.toXY(p.lat, p.lon));
+    cache.runs = field.runs.map(run => run.map(p => frame.toXY(p.lat, p.lon)));
+  }
+
+  // ---------------------------------------------------------------- GPS
+  function onPosition(pos) {
+    if (!frame) setFrame(pos.lat, pos.lon);
+    const xy = frame.toXY(pos.lat, pos.lon);
+    const ll = { lat: +pos.lat.toFixed(9), lon: +pos.lon.toFixed(9) };
+
+    if (pos.speedKmh !== null && pos.speedKmh > 0.5 && pos.course !== null) heading = pos.course;
+    else if (last && geo.distance(last.xy, xy) > 0.3) {
+      heading = (Math.atan2(xy.x - last.xy.x, xy.y - last.xy.y) * 180 / Math.PI + 360) % 360;
+    }
+
+    if (recordingBoundary) {
+      const lb = cache.boundary[cache.boundary.length - 1];
+      if (!lb || geo.distance(lb, xy) >= 1) {
+        field.boundary.push(ll);
+        cache.boundary.push(xy);
+        dirty = true;
+      }
+    }
+
+    if (working) {
+      const run = field.runs[field.runs.length - 1];
+      const runXY = cache.runs[cache.runs.length - 1];
+      const lp = runXY[runXY.length - 1];
+      const d = lp ? geo.distance(lp, xy) : 0;
+      if (!lp || d >= 0.5) {
+        if (lp && d < 50) field.workedM2 += d * settings.workWidth;  // grote sprong = GPS-fout
+        run.push(ll);
+        runXY.push(xy);
+        dirty = true;
+      }
+      const now = Date.now();
+      if (now - lastLogT >= 900) {  // ongeveer 1 per seconde, met marge voor schommelingen
+        field.log.push({ t: now, lat: ll.lat, lon: ll.lon, quality: pos.quality });
+        lastLogT = now;
+      }
+    }
+
+    last = Object.assign({}, pos, { xy });
+    lastDataAt = Date.now();
+    if (view.follow) { view.cx = xy.x; view.cy = xy.y; }
+    updateStatus();
+    updateInfo();
+    requestDraw();
+  }
+
+  // ---------------------------------------------------------------- verbindingen
+  let conn = null;
+
+  function disconnect() {
+    if (conn) { try { conn.close(); } catch (e) { /* al dicht */ } }
+    conn = null;
+  }
+
+  function connectWifi() {
+    disconnect();
+    const host = settings.host || location.host || '192.168.4.1';
+    let ws = null, closed = false, retry = null;
+    const open = () => {
+      setConn('Verbinden met ' + host + '…');
+      try { ws = new WebSocket('ws://' + host + '/ws'); } catch (e) { ws = null; }
+      if (!ws) { retry = setTimeout(open, 3000); return; }
+      ws.onopen = () => setConn('Wifi', 'ok');
+      ws.onmessage = ev => { if (typeof ev.data === 'string') parser.feed(ev.data); };
+      ws.onclose = () => {
+        if (closed) return;
+        setConn('Wifi verbroken', 'bad');
+        retry = setTimeout(open, 2000);
+      };
+    };
+    conn = { type: 'wifi', close() { closed = true; clearTimeout(retry); if (ws) ws.close(); } };
+    settings.connection = 'wifi';
+    dirty = true;
+    open();
+  }
+
+  async function connectUsb() {
+    if (!('serial' in navigator)) {
+      toast('USB werkt alleen in Chrome of Edge op een computer of Windows-tablet.');
+      return;
+    }
+    let port;
+    try { port = await navigator.serial.requestPort(); } catch (e) { return; }  // geannuleerd
+    disconnect();
+    let closed = false, reader = null;
+    conn = {
+      type: 'usb',
+      close() { closed = true; if (reader) reader.cancel().catch(() => {}); },
+    };
+    try {
+      await port.open({ baudRate: 115200 });
+    } catch (e) {
+      setConn('USB-poort bezet', 'bad');
+      return;
+    }
+    setConn('USB', 'ok');
+    settings.connection = 'usb';
+    dirty = true;
+    const decoder = new TextDecoder();
+    try {
+      while (!closed && port.readable) {
+        reader = port.readable.getReader();
+        try {
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            parser.feed(decoder.decode(value, { stream: true }));
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+    } catch (e) {
+      if (!closed) setConn('USB verbroken', 'bad');
+    }
+    try { await port.close(); } catch (e) { /* al dicht */ }
+  }
+
+  function connectDemo() {
+    disconnect();
+    const d = new demo.DemoTractor(text => parser.feed(text), { workWidth: settings.workWidth });
+    d.start();
+    conn = { type: 'demo', close() { d.stop(); } };
+    setConn('Demo', 'warn');
+    settings.connection = 'demo';
+    dirty = true;
+  }
+
+  // ---------------------------------------------------------------- knoppen
+  function toggleBoundary() {
+    if (!recordingBoundary) {
+      if (field.boundary.length && !confirm('De huidige grens vervangen door een nieuwe?')) return;
+      field.boundary = [];
+      cache.boundary = [];
+      recordingBoundary = true;
+      toast('Rij rond het perceel. Druk op "Grens stoppen" als je rond bent.');
+    } else {
+      recordingBoundary = false;
+      if (field.boundary.length < 3) {
+        field.boundary = [];
+        cache.boundary = [];
+        toast('Te weinig punten voor een grens.');
+      } else {
+        toast('Grens opgeslagen: ' + fmtHa(geo.polygonArea(cache.boundary)));
+      }
+    }
+    dirty = true;
+    updateButtons();
+    updateInfo();
+    requestDraw();
+  }
+
+  function toggleWork() {
+    working = !working;
+    if (working) {
+      field.runs.push([]);
+      cache.runs.push([]);
+      lastLogT = 0;
+    } else if (field.runs.length && field.runs[field.runs.length - 1].length < 2) {
+      field.runs.pop();
+      cache.runs.pop();
+    }
+    dirty = true;
+    updateButtons();
+    requestDraw();
+  }
+
+  function exportIsoxml() {
+    if (!field.boundary.length && !field.log.length) {
+      toast('Er is nog niets om te exporteren. Neem een grens op of werk het perceel.');
+      return;
+    }
+    const files = isoxml.buildTaskData({
+      customer: settings.customer, farm: settings.farm, field: settings.field,
+      boundary: field.boundary, areaM2: geo.areaLatLon(field.boundary), log: field.log,
+    });
+    const data = zip.makeZip(files);
+    const d = new Date();
+    const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+    const name = 'TASKDATA_' + (settings.field || 'perceel').replace(/[^\w-]+/g, '_') + '_' + stamp + '.zip';
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/zip' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('Opgeslagen als ' + name + '. Pak uit en zet de map TASKDATA op de USB-stick.');
+  }
+
+  function newFieldClicked() {
+    if ((field.boundary.length || field.log.length) &&
+        !confirm('Alles van dit perceel wissen? Exporteer eerst als je het wilt bewaren.')) return;
+    field = newField();
+    frame = null;
+    cache = { boundary: [], runs: [] };
+    recordingBoundary = false;
+    working = false;
+    if (last) setFrame(last.lat, last.lon);
+    dirty = true;
+    save();
+    updateButtons();
+    updateInfo();
+    requestDraw();
+  }
+
+  // ---------------------------------------------------------------- weergave
+  function fmtHa(m2) { return (m2 / 10000).toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha'; }
+
+  function setConn(text, cls) {
+    const el = $('conn');
+    el.textContent = text;
+    el.className = 'pill' + (cls ? ' ' + cls : '');
+  }
+
+  function updateStatus() {
+    const st = parser.state;
+    const fix = $('fix');
+    fix.textContent = nmea.QUALITY_NAMES[st.quality] || ('Fix ' + st.quality);
+    fix.className = 'pill ' + (st.quality === 4 ? 'ok' : st.quality === 5 || st.quality === 2 ? 'warn' : st.quality === 1 ? 'warn' : 'bad');
+    $('sats').innerHTML = 'Sat <b>' + (st.sats ?? '-') + '</b>';
+    $('hdop').innerHTML = 'HDOP <b>' + (st.hdop ?? '-') + '</b>';
+    $('speed').innerHTML = '<b>' + (st.speedKmh === null ? '-' : st.speedKmh.toFixed(1)) + '</b> km/u';
+  }
+
+  function updateInfo() {
+    $('fieldName').textContent = settings.field || '-';
+    $('areaField').textContent = field.boundary.length >= 3 ? fmtHa(geo.areaLatLon(field.boundary)) : '-';
+    $('areaWorked').textContent = fmtHa(field.workedM2);
+    $('widthInfo').textContent = settings.workWidth.toLocaleString('nl-BE') + ' m';
+  }
+
+  function updateButtons() {
+    const b = $('btnBoundary');
+    b.textContent = recordingBoundary ? 'Grens stoppen' : 'Grens opnemen';
+    b.classList.toggle('rec', recordingBoundary);
+    const w = $('btnWork');
+    w.textContent = working ? 'Werk UIT' : 'Werk AAN';
+    w.classList.toggle('on', working);
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 4500);
+  }
+
+  // ---------------------------------------------------------------- kaart tekenen
+  const canvas = $('map');
+  const ctx = canvas.getContext('2d');
+  let drawPending = false;
+
+  function requestDraw() {
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(() => { drawPending = false; draw(); });
+  }
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const s = view.scale;
+    const sx = x => W / 2 + (x - view.cx) * s;
+    const sy = y => H / 2 - (y - view.cy) * s;
+
+    ctx.fillStyle = css('--map');
+    ctx.fillRect(0, 0, W, H);
+
+    // raster
+    const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    const grid = steps.find(g => g * s >= 60) || 1000;
+    ctx.strokeStyle = css('--grid');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const x0 = Math.floor((view.cx - W / 2 / s) / grid) * grid, x1 = view.cx + W / 2 / s;
+    const y0 = Math.floor((view.cy - H / 2 / s) / grid) * grid, y1 = view.cy + H / 2 / s;
+    for (let x = x0; x <= x1; x += grid) { ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), H); }
+    for (let y = y0; y <= y1; y += grid) { ctx.moveTo(0, sy(y)); ctx.lineTo(W, sy(y)); }
+    ctx.stroke();
+
+    // bewerkte stroken
+    ctx.strokeStyle = css('--cover');
+    ctx.lineWidth = Math.max(1, settings.workWidth * s);
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    for (const run of cache.runs) {
+      if (run.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(sx(run[0].x), sy(run[0].y));
+      for (let i = 1; i < run.length; i++) ctx.lineTo(sx(run[i].x), sy(run[i].y));
+      ctx.stroke();
+    }
+
+    // perceelgrens
+    const bnd = cache.boundary;
+    if (bnd.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(sx(bnd[0].x), sy(bnd[0].y));
+      for (let i = 1; i < bnd.length; i++) ctx.lineTo(sx(bnd[i].x), sy(bnd[i].y));
+      if (recordingBoundary && last) {
+        ctx.lineTo(sx(last.xy.x), sy(last.xy.y));
+        ctx.setLineDash([10, 8]);
+      } else {
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(43, 138, 62, 0.08)';
+        ctx.fill();
+      }
+      ctx.strokeStyle = css('--boundary');
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // tractor met werktuig
+    if (last) {
+      const px = sx(last.xy.x), py = sy(last.xy.y);
+      const a = heading * Math.PI / 180;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(a);
+      const half = settings.workWidth * s / 2;
+      ctx.fillStyle = working ? css('--work') : css('--muted');
+      ctx.fillRect(-half, 6, half * 2, Math.max(4, 0.6 * s));
+      const L = Math.max(22, 5 * s), B = Math.max(14, 2.8 * s);
+      ctx.beginPath();
+      ctx.moveTo(0, -L * 0.6);
+      ctx.lineTo(B / 2, L * 0.4);
+      ctx.lineTo(-B / 2, L * 0.4);
+      ctx.closePath();
+      ctx.fillStyle = css('--accent');
+      ctx.strokeStyle = css('--panel');
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.fillStyle = css('--muted');
+      ctx.font = '600 18px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(conn ? 'Wachten op GPS-positie…' : 'Kies een verbinding bij Instellingen', W / 2, H / 2);
+    }
+
+    // schaalbalk
+    const barM = steps.find(g => g * s >= 80) || 1000;
+    ctx.fillStyle = css('--text');
+    ctx.fillRect(16, H - 22, barM * s, 4);
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(barM + ' m', 16, H - 30);
+  }
+
+  // ---------------------------------------------------------------- aanraken en zoomen
+  const pointers = new Map();
+  let pinchStart = null;
+
+  function zoom(factor) {
+    view.scale = Math.min(80, Math.max(0.1, view.scale * factor));
+    requestDraw();
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [p, q] = [...pointers.values()];
+      pinchStart = { d: Math.hypot(p.x - q.x, p.y - q.y), scale: view.scale };
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    pointers.set(e.pointerId, cur);
+    if (pointers.size === 1) {
+      view.follow = false;
+      view.cx -= (cur.x - prev.x) / view.scale;
+      view.cy += (cur.y - prev.y) / view.scale;
+      requestDraw();
+    } else if (pointers.size === 2 && pinchStart) {
+      const [p, q] = [...pointers.values()];
+      const d = Math.hypot(p.x - q.x, p.y - q.y);
+      view.scale = Math.min(80, Math.max(0.1, pinchStart.scale * d / pinchStart.d));
+      requestDraw();
+    }
+  });
+  const endPointer = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinchStart = null; };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
+
+  // ---------------------------------------------------------------- instellingen
+  const dlg = $('settings');
+
+  function openSettings() {
+    $('setField').value = settings.field;
+    $('setCustomer').value = settings.customer;
+    $('setFarm').value = settings.farm;
+    $('setWidth').value = settings.workWidth;
+    $('setHost').value = settings.host;
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+
+  function readSettings() {
+    settings.field = $('setField').value.trim() || 'Perceel';
+    settings.customer = $('setCustomer').value.trim();
+    settings.farm = $('setFarm').value.trim();
+    const w = parseFloat(String($('setWidth').value).replace(',', '.'));
+    if (w > 0 && w <= 60) settings.workWidth = w;
+    settings.host = $('setHost').value.trim();
+    dirty = true;
+    updateInfo();
+    requestDraw();
+  }
+
+  dlg.addEventListener('close', readSettings);
+  $('connWifi').onclick = () => { readSettings(); connectWifi(); dlg.close(); };
+  $('connUsb').onclick = () => { readSettings(); connectUsb(); dlg.close(); };
+  $('connDemo').onclick = () => { readSettings(); connectDemo(); dlg.close(); };
+  $('clearBoundary').onclick = () => {
+    if (!field.boundary.length || !confirm('De perceelgrens wissen?')) return;
+    field.boundary = [];
+    cache.boundary = [];
+    recordingBoundary = false;
+    dirty = true;
+    updateButtons(); updateInfo(); requestDraw();
+  };
+  $('newField').onclick = () => { newFieldClicked(); dlg.close(); };
+
+  $('btnBoundary').onclick = toggleBoundary;
+  $('btnWork').onclick = toggleWork;
+  $('btnExport').onclick = exportIsoxml;
+  $('btnSettings').onclick = openSettings;
+  $('zoomIn').onclick = () => zoom(1.5);
+  $('zoomOut').onclick = () => zoom(1 / 1.5);
+  $('center').onclick = () => {
+    view.follow = true;
+    if (last) { view.cx = last.xy.x; view.cy = last.xy.y; }
+    requestDraw();
+  };
+
+  // ---------------------------------------------------------------- opstarten
+  window.addEventListener('resize', requestDraw);
+  window.addEventListener('pagehide', () => { dirty = true; save(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { dirty = true; save(); } });
+  setInterval(save, 3000);
+  setInterval(() => {
+    if (conn && lastDataAt && Date.now() - lastDataAt > 3000) {
+      const fix = $('fix');
+      fix.textContent = 'Geen data';
+      fix.className = 'pill bad';
+    }
+  }, 1000);
+
+  // Scherm aan houden (alleen beschikbaar in een beveiligde context).
+  async function keepAwake() {
+    try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (e) { /* niet ondersteund */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) keepAwake(); });
+  keepAwake();
+
+  load();
+  updateStatus();
+  updateInfo();
+  updateButtons();
+  requestDraw();
+
+  // Geopend vanaf het GPS-kastje zelf: meteen via wifi verbinden.
+  const servedByBox = location.protocol === 'http:' && location.hostname && location.hostname !== 'localhost' &&
+    location.hostname !== '127.0.0.1';
+  if (servedByBox || settings.connection === 'wifi') connectWifi();
+  else if (settings.connection === 'demo') connectDemo();
+
+  // Voor tests
+  window.TG.appState = () => ({ settings, field, recordingBoundary, working, last, view });
+})();
+</script>
+</body>
+</html>

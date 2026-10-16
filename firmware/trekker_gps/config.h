@@ -38,13 +38,23 @@
 #define TABLET_USB_BAUD    115200 // zelfde waarde instellen in de tablet-app
 
 // Bluetooth werkt alleen op een gewone ESP32 (ESP32-WROOM-32 / DevKitC),
-// niet op ESP32-S3, -C3 of -C6.
-#define TABLET_BT_ENABLED  1
+// niet op ESP32-S3, -C3 of -C6. Standaard uit: wifi en Bluetooth samen
+// vragen veel geheugen. Zet aan als je een andere tablet-app via Bluetooth gebruikt.
+#define TABLET_BT_ENABLED  0
 #define TABLET_BT_NAME     "Trekker-GPS"
 
 // RTCM-correcties die de tablet terugstuurt (bv. AgIO NTRIP-client in
 // AgOpenGPS) worden doorgegeven aan de GPS-module.
 #define TABLET_FORWARD_RTCM 1
+
+// ---------------------------------------------------------------------------
+// Trekker-GPS app via wifi. Het kastje maakt een eigen wifinetwerk.
+// Verbind de tablet ermee en open http://192.168.4.1 in de browser.
+// Vraagt de bibliotheken "ESPAsyncWebServer" en "AsyncTCP" van ESP32Async.
+// ---------------------------------------------------------------------------
+#define WIFI_APP_ENABLED 1
+#define WIFI_AP_SSID     "Trekker-GPS"
+#define WIFI_AP_PASSWORD "trekker123"  // minstens 8 tekens, verander dit
 
 // ---------------------------------------------------------------------------
 // Ingebouwde NTRIP-client via wifi (bv. hotspot van je gsm).

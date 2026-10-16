@@ -1,7 +1,7 @@
 // trekker_gps.ino
 //
 // Leest NMEA van een Quectel LC29H en verdeelt het over:
-//   - de tablet via USB en/of Bluetooth (alle zinnen),
+//   - de tablet via de Trekker-GPS app over wifi, USB en/of Bluetooth (alle zinnen),
 //   - de Amazone Amatron 3 via RS232 (GGA, VTG, GSA aan 19200 baud).
 // RTCM-correcties komen van de tablet of van de ingebouwde NTRIP-client.
 //
@@ -16,9 +16,20 @@
 BluetoothSerial SerialBT;
 #endif
 
-#if NTRIP_ENABLED
+#if NTRIP_ENABLED || WIFI_APP_ENABLED
 #include <WiFi.h>
+#endif
+#if NTRIP_ENABLED
 #include <base64.h>
+#endif
+#if WIFI_APP_ENABLED
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include "web_app.h"
+static AsyncWebServer webServer(80);
+static AsyncWebSocket webSocket("/ws");
+static char wsBuf[2048];
+static size_t wsLen = 0;
 #endif
 
 HardwareSerial& GNSS = Serial2;
@@ -75,7 +86,41 @@ static void configureGnss() {
 // ---------------------------------------------------------------------------
 // Uitvoer
 // ---------------------------------------------------------------------------
+#if WIFI_APP_ENABLED
+// Zinnen bundelen en ongeveer 10 keer per seconde naar de app sturen.
+static void wsFlush() {
+  if (wsLen && webSocket.count() > 0) webSocket.textAll(wsBuf, wsLen);
+  wsLen = 0;
+}
+
+static void wsQueue(const char* line, size_t len) {
+  if (wsLen + len + 2 > sizeof wsBuf) wsFlush();
+  if (len + 2 > sizeof wsBuf) return;
+  memcpy(wsBuf + wsLen, line, len);
+  wsBuf[wsLen + len] = '\r';
+  wsBuf[wsLen + len + 1] = '\n';
+  wsLen += len + 2;
+}
+
+static void setupWebApp() {
+  WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
+  webServer.addHandler(&webSocket);
+  webServer.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
+    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", WEB_APP_GZ, WEB_APP_GZ_LEN);
+    res->addHeader("Content-Encoding", "gzip");
+    res->addHeader("Cache-Control", "no-cache");
+    req->send(res);
+  });
+  webServer.onNotFound([](AsyncWebServerRequest* req) { req->redirect("/"); });
+  webServer.begin();
+  DBG("app op http://%s", WiFi.softAPIP().toString().c_str());
+}
+#endif
+
 static void sendToTablet(const char* line, size_t len) {
+#if WIFI_APP_ENABLED
+  wsQueue(line, len);
+#endif
 #if TABLET_USB_ENABLED
   Serial.write((const uint8_t*)line, len);
   Serial.write("\r\n");
@@ -89,6 +134,7 @@ static void sendToTablet(const char* line, size_t len) {
 }
 
 static void sendToAmatron(const char* line) {
+  (void)line;
 #if AMATRON_ENABLED
   char out[nmea::MAX_LINE + 8];
   size_t n = amatronFilter->process(line, out, sizeof out);
@@ -158,6 +204,7 @@ static char header[256];
 static size_t headerLen = 0;
 
 static void ntripFail(const char* why) {
+  (void)why;  // alleen gebruikt als DEBUG_OUTPUT aan staat
   DBG("NTRIP: %s, opnieuw over 5 s", why);
   caster.stop();
   ntripState = RETRY_WAIT;
@@ -265,8 +312,17 @@ void setup() {
   SerialBT.begin(TABLET_BT_NAME);
 #endif
 
-#if NTRIP_ENABLED
+#if WIFI_APP_ENABLED && NTRIP_ENABLED
+  WiFi.mode(WIFI_AP_STA);  // eigen netwerk voor de tablet + internet via gsm-hotspot
+#elif WIFI_APP_ENABLED
+  WiFi.mode(WIFI_AP);
+#elif NTRIP_ENABLED
   WiFi.mode(WIFI_STA);
+#endif
+#if WIFI_APP_ENABLED
+  setupWebApp();
+#endif
+#if NTRIP_ENABLED
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 #endif
@@ -293,6 +349,12 @@ void loop() {
 #endif
 
   updateLed();
+
+#if WIFI_APP_ENABLED
+  static unsigned long lastWsFlush = 0, lastWsCleanup = 0;
+  if (millis() - lastWsFlush >= 100) { lastWsFlush = millis(); wsFlush(); }
+  if (millis() - lastWsCleanup >= 1000) { lastWsCleanup = millis(); webSocket.cleanupClients(); }
+#endif
 
 #if DEBUG_OUTPUT
   static unsigned long lastReport = 0;
