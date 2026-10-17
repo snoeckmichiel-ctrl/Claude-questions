@@ -15,6 +15,9 @@
 #define GNSS_FIX_INTERVAL_MS 200
 // GSV (satellietlijst voor de tablet) één keer per zoveel metingen. 0 = uit.
 #define GNSS_GSV_EVERY   5
+// EGNOS (SBAS) aanzetten. Dan meldt de module DGPS-kwaliteit, en die heeft de
+// Amatron 3 nodig om de bewerkte stroken groen te tonen in plaats van geel.
+#define GNSS_ENABLE_SBAS 1
 
 // ---------------------------------------------------------------------------
 // Amatron 3 (RS232 via een MAX3232-module, NOOIT rechtstreeks aansluiten)
@@ -30,6 +33,7 @@
 #define AMATRON_SEND_ZDA 0
 #define AMATRON_TALKER_GP 1       // $GNGGA -> $GPGGA, voor oudere terminals
 #define AMATRON_STRIP_GSA_SYSID 1 // NMEA 4.10-extra veld in GSA weglaten
+#define AMATRON_RTK_AS_DGPS 1     // RTK-kwaliteit (4, 5) als DGPS (2) melden, zie handleiding
 
 // ---------------------------------------------------------------------------
 // Tablet

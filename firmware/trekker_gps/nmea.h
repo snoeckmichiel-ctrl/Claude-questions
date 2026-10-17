@@ -131,6 +131,9 @@ struct AmatronConfig {
   bool zda = false;
   bool rewriteTalkerToGP = true;  // "$GNGGA" wordt "$GPGGA" voor oudere terminals
   bool stripGsaSystemId = true;   // laatste GSA-veld uit NMEA 4.10 weglaten
+  // De Amatron 3 kent in zijn kwaliteitstabel alleen GPS (1) en DGPS (2).
+  // RTK fixed (4) en RTK float (5) worden daarom als DGPS doorgegeven.
+  bool rtkAsDgps = true;
 };
 
 // Kiest welke zinnen naar de Amatron gaan en past ze zo nodig aan.
@@ -163,6 +166,18 @@ class AmatronFilter {
     body[bodyLen] = '\0';
 
     if (cfg_.rewriteTalkerToGP && body[0] == 'G' && body[1] == 'N') body[1] = 'P';
+
+    if (t == GGA && cfg_.rtkAsDgps) {
+      // Veld 6 is de kwaliteit: na de zesde komma, één cijfer.
+      int commas = 0;
+      for (size_t i = 0; i < bodyLen; ++i) {
+        if (body[i] == ',' && ++commas == 6) {
+          char* q = body + i + 1;
+          if ((q[0] == '4' || q[0] == '5') && q[1] == ',') q[0] = '2';
+          break;
+        }
+      }
+    }
 
     if (t == GSA && cfg_.stripGsaSystemId) {
       // Standaard GSA heeft 17 komma's. NMEA 4.10 voegt een systeem-ID toe (18).

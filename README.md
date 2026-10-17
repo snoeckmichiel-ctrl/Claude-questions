@@ -112,28 +112,51 @@ De ESP32 en de LC29H werken allebei op 3,3V. Een levelshifter is dus niet nodig,
 | GPIO26 | TXD / T1IN | uit T1OUT naar Amatron RX |
 | GPIO27 | RXD / R1OUT | niet nodig |
 
-Bij een standaard RS232-apparaat is pin 2 de ontvangst (RX) en pin 3 de zending (TX). Komt er niets aan, wissel dan pin 2 en 3, of gebruik een null-modemkabel.
+De Amatron-kant is de 9-polige aansluiting **GPS** onderaan het terminal. Bij een standaard RS232-apparaat is pin 2 de ontvangst (RX) en pin 3 de zending (TX). Komt er niets aan, wissel dan pin 2 en 3, of gebruik een null-modemkabel. Een DB9-stekker met schroefklemmen maakt dat wisselen makkelijk.
 
 **Tip om RX en TX te vinden:** meet met een multimeter tussen pin 5 en pin 2 en 3 terwijl de Amatron aanstaat. De pin met ongeveer -5 tot -12V is de TX van de Amatron. De andere is RX, en daar moet het GPS-signaal naartoe.
 
 ## Amatron 3 instellen
 
-Volgens de handleiding MG4038 verwacht de Amatron 3:
+Dit volgt de Nederlandse handleiding MG5560-NL-II van de Amatron 3, softwareversie 01.09.00.
 
-| Instelling | Waarde |
-|---|---|
-| Baudrate | 19200 |
-| Data | 8 bits, geen pariteit, 1 stopbit |
-| Zinnen | GGA, VTG en GSA |
-| Frequentie | 5 Hz |
+### Aansluiting
 
-1. Schakel de lightbar uit in de Setup van het terminal, onder Program Manager.
-2. Stel de baudrate in op 19200 in het menu GPS-diagnose.
-3. Herstart de Amatron.
-4. Controleer in het menu GPS-diagnose of er een positie binnenkomt.
-5. Vul de positie van de antenne op de tractor in bij de machinegegevens.
+Onderaan de Amatron 3 zitten twee 9-polige Sub-D-aansluitingen, gemerkt **CAN** en **GPS**. Het kastje gaat op **GPS**, via de MAX3232. De handleiding geeft de pinnen van die aansluiting niet. Meet ze daarom na, zoals beschreven bij "Aansluiten".
 
-Oudere Amatron-software verwacht soms `$GPGGA` in plaats van `$GNGGA`. De firmware zet dat standaard om. Dat stel je in met `AMATRON_TALKER_GP` in `config.h`.
+### Wat de Amatron verwacht
+
+| Instelling | Waarde | Het kastje |
+|---|---|---|
+| Baudrate | 19200 | 19200 |
+| Data | 8 bits, geen pariteit, 1 stopbit | idem |
+| Zinnen | GGA, VTG en GSA | GGA, VTG en één GSA per meting |
+| Frequentie | 5 Hz | 5 Hz, tot 10 Hz instelbaar |
+
+### Instellen op de Amatron
+
+1. **Lightbar uitzetten:** "Setup" > "Instellingen" > "Interfaces" > "Lightbar", uitschakelen en de Amatron herstarten.
+2. **GPS-ontvanger kiezen:** "GPS-driver" > **"Overige"**, en bij "Baudrate" **19200**.
+3. **Plaats van de antenne:** "Tractordata" > "Geometriegegevens". Vul bij A de afstand links of rechts van het midden in, en bij B de afstand voor of achter de achteras. Zet daarna "Geometriegegevens zenden" aan.
+4. **Controleren:** open het menu GPS-diagnose en kijk of er gegevens binnenkomen.
+
+### GPS-kwaliteit op de Amatron
+
+| Kwaliteit in GGA | HDOP | Amatron toont |
+|---|---|---|
+| DGPS | 0 tot 6 | **goed**, bewerkte strook groen |
+| DGPS | 6 tot 8 | gemiddeld, geel |
+| GPS zonder correctie | 0 tot 6 | gemiddeld, geel |
+| GPS zonder correctie | boven 6 | slecht, veld verdwijnt |
+
+Daarom doet de firmware twee dingen:
+
+- **EGNOS aan in de GPS-module** (`GNSS_ENABLE_SBAS`). Dan meldt de module DGPS, en kleurt de Amatron groen.
+- **RTK als DGPS doorgeven** (`AMATRON_RTK_AS_DGPS`). De tabel van de Amatron kent geen RTK. De positie zelf blijft even nauwkeurig.
+
+De handleiding raadt voor precies schakelen op de wendakker RTK aan, met minstens 5 Hz. Dat kan later met de EA-module en correcties via NTRIP.
+
+Oudere Amatron-software verwacht soms `$GPGGA` in plaats van `$GNGGA`. De firmware zet dat standaard om met `AMATRON_TALKER_GP`.
 
 ## De Trekker-GPS app
 

@@ -110,6 +110,9 @@ static void configureGnss() {
   sendGnssCommand("PAIR062,5,1");  // VTG elke meting
   snprintf(cmd, sizeof cmd, "PAIR062,6,%d", perSecond);
   sendGnssCommand(cmd);            // ZDA 1x per seconde
+#if GNSS_ENABLE_SBAS
+  sendGnssCommand("PAIR410,1");    // SBAS (EGNOS) aan
+#endif
 #endif
 }
 
@@ -504,6 +507,7 @@ void setup() {
   cfg.zda = AMATRON_SEND_ZDA;
   cfg.rewriteTalkerToGP = AMATRON_TALKER_GP;
   cfg.stripGsaSystemId = AMATRON_STRIP_GSA_SYSID;
+  cfg.rtkAsDgps = AMATRON_RTK_AS_DGPS;
   amatronFilter = new nmea::AmatronFilter(cfg);
   AMATRON.setTxBufferSize(1024);
   AMATRON.begin(AMATRON_BAUD, SERIAL_8N1, AMATRON_RX_PIN, AMATRON_TX_PIN);

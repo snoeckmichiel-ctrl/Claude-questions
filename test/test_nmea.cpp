@@ -104,9 +104,28 @@ int main() {
   // Talker ongewijzigd laten als dat zo ingesteld is.
   nmea::AmatronConfig keep;
   keep.rewriteTalkerToGP = false;
+  keep.rtkAsDgps = false;
   nmea::AmatronFilter filt3(keep);
   len = filt3.process(g1.c_str(), o, sizeof o);
   CHECK(len && std::string(o, len - 2) == g1);
+
+  // RTK-kwaliteit wordt DGPS voor de Amatron, andere kwaliteiten blijven.
+  {
+    nmea::AmatronFilter f4;
+    std::string rtk = withChecksum("GNGGA,120000.00,5100.0000,N,00400.0000,E,4,20,0.6,30.0,M,46.0,M,1.0,0000");
+    size_t l = f4.process(rtk.c_str(), o, sizeof o);
+    std::string got(o, l - 2);
+    CHECK(got == withChecksum("GPGGA,120000.00,5100.0000,N,00400.0000,E,2,20,0.6,30.0,M,46.0,M,1.0,0000"));
+    CHECK(nmea::checksumOk(got.c_str()));
+    std::string gps = withChecksum("GNGGA,120000.00,5100.0000,N,00400.0000,E,1,20,0.6,30.0,M,46.0,M,,");
+    l = f4.process(gps.c_str(), o, sizeof o);
+    CHECK(nmea::ggaFixQuality(std::string(o, l - 2).c_str()) == 1);
+    nmea::AmatronConfig keepQ;
+    keepQ.rtkAsDgps = false;
+    nmea::AmatronFilter f5(keepQ);
+    l = f5.process(rtk.c_str(), o, sizeof o);
+    CHECK(nmea::ggaFixQuality(std::string(o, l - 2).c_str()) == 4);
+  }
 
   if (failures == 0) printf("Alle tests geslaagd.\n");
   return failures ? 1 : 0;
